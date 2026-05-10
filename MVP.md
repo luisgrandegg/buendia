@@ -6,6 +6,7 @@
 **Project name:** Buendía (display) / `buendia` (code, package names, URLs — no accent for portability).
 **Name origin:** *buen día* — the daily ritual of opening your second brain. Also a nod to the Buendía family in *Cien años de soledad*: generations of accumulated memory, knowledge moving through time.
 **License intent:** AGPL-3.0 (protects the SaaS use case for an open-source service).
+**Companion docs:** [`CONSTITUTION.md`](./CONSTITUTION.md) governs design decisions; [`FUTURE_SKILLS.md`](./FUTURE_SKILLS.md) holds the thought experiments that pressure-tested the architecture below.
 
 ---
 
@@ -626,7 +627,7 @@ In rough priority order:
 
 When picking this up:
 
-1. Read this entire spec end-to-end before writing code.
+1. Read this spec, [`CONSTITUTION.md`](./CONSTITUTION.md), and [`FUTURE_SKILLS.md`](./FUTURE_SKILLS.md) end-to-end before writing code. The constitution governs decisions; the future-skills doc explains why certain design choices (skill-agnostic schemas, locked embedding dimension, named-abstraction conventions) are intentional.
 2. Start with **Phase 0**, finish it completely, get sign-off, then proceed.
 3. Don't skip ahead. Each phase's "Done when" is a hard gate.
 4. When in doubt about a tech choice, prefer the choice in §3. When in doubt about scope, prefer to defer to §13.

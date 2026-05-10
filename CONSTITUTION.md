@@ -88,7 +88,7 @@ Three properties matter, and they must be true on day one:
 - **Permissions are first-class.** A skill declares the scopes it needs (`read:source=meetings`, `write:source=self`). The user grants, revokes, audits. In MVP, the only skill is Buendía and permissions are implicit; the schema is still permission-shaped.
 - **Embeddings are cross-skill substrate.** Semantic search over the context layer is a platform capability, not a Buendía capability. Any future skill should be able to query "what does the user know about X" without re-embedding.
 
-Every design choice in Buendía's data layer must answer: *would this generalize cleanly to a second, unrelated skill?* If no, redesign before shipping.
+Every design choice in Buendía's data layer must answer: *would this generalize cleanly to a second, unrelated skill?* If no, redesign before shipping. Candidate skills to pressure-test against live in [`FUTURE_SKILLS.md`](./FUTURE_SKILLS.md).
 
 ---
 
@@ -114,7 +114,7 @@ Buendía's job:
 
 1. Prove the personal-context layer is useful (summaries, embeddings, tags, search) for one concrete domain — saved links and videos.
 2. Force the architectural separation between "core" and "skill" to be real, even when both ship together.
-3. Earn the right to extract. Once Buendía works and is in real use, attempt a second small skill on the same stack. If that's easy, the platform vision is validated and extraction begins. If it's hard, the abstraction was wrong; iterate.
+3. Earn the right to extract. Once Buendía works and is in real use, attempt a second small skill on the same stack — see [`FUTURE_SKILLS.md`](./FUTURE_SKILLS.md) for current candidates. If that's easy, the platform vision is validated and extraction begins. If it's hard, the abstraction was wrong; iterate.
 
 We do not extract early. We do not generalize speculatively. We earn each generalization by needing it.
 

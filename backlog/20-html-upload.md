@@ -15,7 +15,7 @@ and ends up with an `apps` row, the HTML stored, and a generated slug.
 - Server-side validation: size cap, MIME sniff, `.html` only, single-file rule.
 - Store the HTML blob (decide where in `decisions/0002-html-storage.md`:
   control-plane Supabase Storage vs the user's; default control-plane to keep
-  the owner's backend purely for app *data*).
+  the owner's backend purely for app _data_).
 - Write `apps` + first `app_versions` row. Generate a URL-safe slug.
 - Persist `schema.sql` text (if uploaded) on `app_versions.schema_sql` for the
   provisioner to consume in ticket 21.

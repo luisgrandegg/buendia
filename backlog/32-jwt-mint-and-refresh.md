@@ -7,7 +7,7 @@
 ## Goal
 
 Single control-plane endpoint that mints JWTs scoped to a single app, signed
-with the *owner's* project JWT secret, with the claim shape the constitution
+with the _owner's_ project JWT secret, with the claim shape the constitution
 prescribes.
 
 ## Scope

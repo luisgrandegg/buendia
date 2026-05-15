@@ -17,7 +17,7 @@ from the owner's Supabase project.
   - `index.html` (current version)
   - `schema.sql` (as uploaded; or reconstructed from live schema if the
     upload predates a schema change — document the choice)
-  - `data.sql` (pg_dump of `app_<slug>` data, ordered by table)
+  - `data.sql` (pg*dump of `app*<slug>` data, ordered by table)
   - `README.md` explaining how to run the bundle on any static host with a
     fresh Supabase project.
 - Bundle is downloaded directly; not stored long-term server-side.

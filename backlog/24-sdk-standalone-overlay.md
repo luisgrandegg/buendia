@@ -24,7 +24,7 @@ runs the same `Buendia.init()` flow with `mode: 'standalone'`.
 
 ## Out of scope
 
-- Server-side help / project provisioning from standalone mode (that *is* the
+- Server-side help / project provisioning from standalone mode (that _is_ the
   hosted platform; standalone deliberately falls back to URL-paste).
 
 ## Acceptance criteria

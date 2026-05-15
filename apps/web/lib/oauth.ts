@@ -155,3 +155,60 @@ export function originFromHeaders(h: Headers): string {
 export function supabaseCallbackUrl(origin: string): string {
   return `${origin}/api/auth/supabase/callback`;
 }
+
+export interface RefreshAccessTokenParams {
+  refreshToken: string;
+  clientId: string;
+  clientSecret: string;
+}
+
+/**
+ * Trade a stored refresh token for a fresh access token. Supabase rotates
+ * refresh tokens on every exchange, so callers must persist the new
+ * `refreshToken` if the call succeeds.
+ */
+export async function refreshAccessToken({
+  refreshToken,
+  clientId,
+  clientSecret,
+}: RefreshAccessTokenParams): Promise<TokenExchangeResult> {
+  const body = new URLSearchParams({
+    grant_type: "refresh_token",
+    refresh_token: refreshToken,
+  });
+
+  const basic = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
+
+  const response = await fetch(SUPABASE_OAUTH_TOKEN_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      Accept: "application/json",
+      Authorization: `Basic ${basic}`,
+    },
+    body: body.toString(),
+  });
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => "");
+    throw new Error(`Supabase OAuth refresh failed (${response.status}): ${text}`);
+  }
+
+  const json = (await response.json()) as {
+    access_token?: string;
+    refresh_token?: string;
+    expires_in?: number;
+    token_type?: string;
+  };
+
+  if (!json.access_token) {
+    throw new Error("Supabase OAuth refresh response missing access_token");
+  }
+
+  return {
+    accessToken: json.access_token,
+    refreshToken: json.refresh_token ?? refreshToken,
+    expiresIn: json.expires_in ?? 0,
+    tokenType: json.token_type ?? "Bearer",
+  };
+}

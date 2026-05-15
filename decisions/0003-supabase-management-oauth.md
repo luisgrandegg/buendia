@@ -72,9 +72,12 @@ TTL). The cookie is deleted on callback regardless of outcome.
 
 ## Operator setup
 
-1. In the Supabase dashboard, open **your organization** (not your
-   account), then the **OAuth Apps** tab. Direct URL:
-   `https://supabase.com/dashboard/org/<your-org-slug>/oauth-apps`.
+1. In the Supabase dashboard, open **your organization** (not a project),
+   then the **Apps** tab. Direct URL:
+   `https://supabase.com/dashboard/org/<your-org-slug>/apps`.
+   This is distinct from the project-level **Authentication → OAuth Server**
+   screen, which is for using a Supabase project as an identity provider —
+   not what we want.
 2. Click **Add application**. Set the redirect URI to
    `https://<your-production-host>/api/auth/supabase/callback`.
 3. Request scopes: `organizations.read projects.read projects.write secrets.read`.

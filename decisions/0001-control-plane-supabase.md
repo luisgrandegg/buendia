@@ -21,12 +21,14 @@ project provides:
   in MVP; OAuth providers post-MVP).
 
 The operator provisions this project manually, once, and supplies its URL +
-anon key to `apps/web` via environment variables:
+publishable key to `apps/web` via environment variables. Supabase introduced
+the `sb_publishable_…` key format in late 2025 as the modern replacement for
+the legacy JWT-format anon key; we use the new format from day one.
 
-| Variable                        | Where                                     |
-| ------------------------------- | ----------------------------------------- |
-| `NEXT_PUBLIC_SUPABASE_URL`      | Vercel project env (Production + Preview) |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Vercel project env (Production + Preview) |
+| Variable                               | Where                                     |
+| -------------------------------------- | ----------------------------------------- |
+| `NEXT_PUBLIC_SUPABASE_URL`             | Vercel project env (Production + Preview) |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Vercel project env (Production + Preview) |
 
 SQL migrations live in [`packages/db/migrations/`](../packages/db/migrations)
 and are applied manually against the Supabase project — see
@@ -79,8 +81,9 @@ cases (constitution §5).
 1. Create a Supabase project at https://supabase.com/dashboard. Free tier is
    fine for MVP.
 2. From the SQL editor, run every file in `packages/db/migrations/` in order.
-3. Copy the project URL and anon key into Vercel's project env vars (or your
-   `.env.local` for local development; see [`apps/web/.env.example`](../apps/web/.env.example)).
+3. Copy the project URL and publishable key (Project Settings → API Keys →
+   `sb_publishable_…`) into Vercel's project env vars (or your `.env.local`
+   for local development; see [`apps/web/.env.example`](../apps/web/.env.example)).
 4. In Supabase Auth settings, enable email + password and disable email
    confirmation for MVP if you want frictionless signup; turn it back on
    when invitations land (ticket 31).

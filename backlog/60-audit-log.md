@@ -2,7 +2,7 @@
 
 **Phase:** Cross-cutting
 **Depends on:** 01
-**Constitution refs:** §3, Architecture Invariants §The platform never holds app data (audit is *control-plane* state, not app data)
+**Constitution refs:** §3, Architecture Invariants §The platform never holds app data (audit is _control-plane_ state, not app data)
 
 ## Goal
 

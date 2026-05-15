@@ -1,0 +1,11 @@
+node_modules
+dist
+build
+.next
+.turbo
+coverage
+pnpm-lock.yaml
+
+# Governing docs preserve their authored formatting.
+CONSTITUTION.md
+MVP.md

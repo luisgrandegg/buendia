@@ -13,4 +13,22 @@ export const env = {
   get supabasePublishableKey() {
     return required("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY");
   },
+  /**
+   * Master KEK for envelope-encrypting owner-backend credentials. Decoded by
+   * `loadMasterKey()` in `@buendia/db`.
+   */
+  get buendiaMasterKey() {
+    return required("BUENDIA_MASTER_KEY");
+  },
+  /**
+   * Supabase Management OAuth app credentials. The operator registers a
+   * Supabase OAuth app and supplies these. See
+   * decisions/0003-supabase-management-oauth.md.
+   */
+  get supabaseOauthClientId() {
+    return required("SUPABASE_OAUTH_CLIENT_ID");
+  },
+  get supabaseOauthClientSecret() {
+    return required("SUPABASE_OAUTH_CLIENT_SECRET");
+  },
 };

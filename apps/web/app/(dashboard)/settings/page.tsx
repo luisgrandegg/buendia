@@ -1,3 +1,4 @@
+import { provisionProjectAction } from "@/app/actions/owner-backend";
 import { createClient } from "@/lib/supabase/server";
 import { getOwnerBackendStatus } from "@/lib/owner-backend";
 
@@ -13,8 +14,8 @@ const rowStyle = {
 
 const labelStyle = { color: "#6b7280" };
 
-const statusMessages: Record<string, { tone: "ok" | "warn"; text: string }> = {
-  ok: { tone: "ok", text: "Supabase connected. Project provisioning lands in ticket 11." },
+const supabaseMessages: Record<string, { tone: "ok" | "warn"; text: string }> = {
+  ok: { tone: "ok", text: "Supabase connected. Provision your project to finish." },
   denied: {
     tone: "warn",
     text: "You declined the Supabase authorization. You can retry whenever you're ready.",
@@ -25,8 +26,53 @@ const statusMessages: Record<string, { tone: "ok" | "warn"; text: string }> = {
   },
 };
 
+const provisionMessages: Record<string, { tone: "ok" | "warn"; text: string }> = {
+  ok: { tone: "ok", text: "Your Buendia Apps project is ready." },
+  unauthenticated: { tone: "warn", text: "Sign in and try again." },
+  not_connected: {
+    tone: "warn",
+    text: "Connect Supabase before provisioning a project.",
+  },
+  oauth_refresh_failed: {
+    tone: "warn",
+    text: "Supabase refused the stored credentials. Disconnect and reconnect to retry.",
+  },
+  list_orgs_failed: {
+    tone: "warn",
+    text: "Couldn't read your Supabase organizations. Please try again.",
+  },
+  no_organization: {
+    tone: "warn",
+    text: "Create a Supabase organization first, then provision again.",
+  },
+  free_tier_limit: {
+    tone: "warn",
+    text: "Your Supabase organization is at the free-tier project limit. Free up a slot or upgrade in Supabase, then try again.",
+  },
+  create_project_failed: {
+    tone: "warn",
+    text: "Supabase rejected the project creation. Please try again.",
+  },
+  project_unhealthy: {
+    tone: "warn",
+    text: "The new project didn't reach a healthy state. Try again or check Supabase's status.",
+  },
+  still_provisioning: {
+    tone: "warn",
+    text: "Supabase is still preparing your project. Refresh this page in a moment.",
+  },
+  fetch_keys_failed: {
+    tone: "warn",
+    text: "Project created, but Buendia couldn't read its API keys. Try the provision step again.",
+  },
+  persist_failed: {
+    tone: "warn",
+    text: "Project created, but Buendia couldn't save its credentials. Try again.",
+  },
+};
+
 interface PageProps {
-  searchParams: Promise<{ supabase?: string }>;
+  searchParams: Promise<{ supabase?: string; provision?: string }>;
 }
 
 export default async function SettingsPage({ searchParams }: PageProps) {
@@ -36,8 +82,11 @@ export default async function SettingsPage({ searchParams }: PageProps) {
   } = await supabase.auth.getUser();
 
   const status = user ? await getOwnerBackendStatus(user.id) : null;
-  const { supabase: supabaseParam } = await searchParams;
-  const banner = supabaseParam ? statusMessages[supabaseParam] : undefined;
+  const { supabase: supabaseParam, provision: provisionParam } = await searchParams;
+  const banner =
+    (provisionParam && provisionMessages[provisionParam]) ||
+    (supabaseParam && supabaseMessages[supabaseParam]) ||
+    undefined;
 
   return (
     <div>
@@ -79,7 +128,13 @@ export default async function SettingsPage({ searchParams }: PageProps) {
       <section style={{ marginTop: "2rem" }}>
         <h2 style={{ fontSize: "1rem", marginBottom: "0.5rem" }}>Connected backend</h2>
 
-        {status?.exists ? <ConnectedBackendDetails status={status} /> : <ConnectSupabaseCta />}
+        {!status?.exists ? (
+          <ConnectSupabaseCta />
+        ) : status.hasProject ? (
+          <ConnectedBackendDetails status={status} />
+        ) : (
+          <ProvisionProjectCta connectedAt={status.connectedAt} />
+        )}
       </section>
     </div>
   );
@@ -94,11 +149,7 @@ function ConnectedBackendDetails({
     <dl style={{ margin: 0 }}>
       <div style={rowStyle}>
         <dt style={labelStyle}>Supabase</dt>
-        <dd style={{ margin: 0 }}>
-          {status.hasProject
-            ? "Connected · project provisioned"
-            : "OAuth complete · project provisioning pending"}
-        </dd>
+        <dd style={{ margin: 0 }}>Connected · project provisioned</dd>
       </div>
       <div style={rowStyle}>
         <dt style={labelStyle}>Connected at</dt>
@@ -117,20 +168,47 @@ function ConnectSupabaseCta() {
         To host your apps, Buendia needs to manage projects in your Supabase organization. You stay
         the owner; Buendia drops out cleanly if you disconnect.
       </p>
-      <button
-        type="submit"
-        style={{
-          padding: "0.5rem 1rem",
-          borderRadius: "0.375rem",
-          border: "1px solid #111827",
-          background: "#111827",
-          color: "white",
-          fontSize: "0.9375rem",
-          cursor: "pointer",
-        }}
-      >
+      <button type="submit" style={primaryButtonStyle}>
         Connect Supabase
       </button>
     </form>
   );
 }
+
+function ProvisionProjectCta({ connectedAt }: { connectedAt: string | null }) {
+  return (
+    <div>
+      <dl style={{ margin: "0 0 1rem 0" }}>
+        <div style={rowStyle}>
+          <dt style={labelStyle}>Supabase</dt>
+          <dd style={{ margin: 0 }}>OAuth complete · project not yet provisioned</dd>
+        </div>
+        <div style={rowStyle}>
+          <dt style={labelStyle}>Connected at</dt>
+          <dd style={{ margin: 0 }}>
+            {connectedAt ? new Date(connectedAt).toLocaleString() : "—"}
+          </dd>
+        </div>
+      </dl>
+      <p style={{ color: "#4b5563", margin: "0 0 1rem 0" }}>
+        Buendia will create one project named "Buendia Apps" in your first Supabase organization.
+        This takes 30–60 seconds. You can keep using the dashboard while it runs.
+      </p>
+      <form action={provisionProjectAction}>
+        <button type="submit" style={primaryButtonStyle}>
+          Provision project
+        </button>
+      </form>
+    </div>
+  );
+}
+
+const primaryButtonStyle = {
+  padding: "0.5rem 1rem",
+  borderRadius: "0.375rem",
+  border: "1px solid #111827",
+  background: "#111827",
+  color: "white",
+  fontSize: "0.9375rem",
+  cursor: "pointer",
+} as const;

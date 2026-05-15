@@ -1,5 +1,6 @@
 "use server";
 
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 
@@ -12,6 +13,17 @@ function readCredentials(formData: FormData): { email: string; password: string 
     throw new Error("Invalid form submission");
   }
   return { email: email.trim().toLowerCase(), password };
+}
+
+async function requestOrigin(): Promise<string> {
+  const h = await headers();
+  const forwardedHost = h.get("x-forwarded-host");
+  const host = forwardedHost ?? h.get("host");
+  if (!host) {
+    throw new Error("Cannot determine request host");
+  }
+  const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
+  return `${proto}://${host}`;
 }
 
 export async function signInAction(_previous: AuthState, formData: FormData): Promise<AuthState> {
@@ -27,7 +39,12 @@ export async function signInAction(_previous: AuthState, formData: FormData): Pr
 export async function signUpAction(_previous: AuthState, formData: FormData): Promise<AuthState> {
   const { email, password } = readCredentials(formData);
   const supabase = await createClient();
-  const { error } = await supabase.auth.signUp({ email, password });
+  const origin = await requestOrigin();
+  const { error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: { emailRedirectTo: `${origin}/auth/callback` },
+  });
   if (error) {
     return { error: error.message };
   }

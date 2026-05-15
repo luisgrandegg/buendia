@@ -72,16 +72,19 @@ TTL). The cookie is deleted on callback regardless of outcome.
 
 ## Operator setup
 
-1. Visit https://supabase.com/dashboard/account/integrations →
-   **OAuth Apps** → **Register a new application**.
-2. Set the redirect URI to
+1. In the Supabase dashboard, open **your organization** (not your
+   account), then the **OAuth Apps** tab. Direct URL:
+   `https://supabase.com/dashboard/org/<your-org-slug>/oauth-apps`.
+2. Click **Add application**. Set the redirect URI to
    `https://<your-production-host>/api/auth/supabase/callback`.
 3. Request scopes: `organizations.read projects.read projects.write secrets.read`.
-4. Copy the client ID + client secret into Vercel env:
+4. Click **Confirm**. Copy the client ID + client secret into Vercel env:
    - `SUPABASE_OAUTH_CLIENT_ID`
    - `SUPABASE_OAUTH_CLIENT_SECRET`
 5. Apply `packages/db/migrations/0004_owner_backends_for_oauth_flow.sql`
    so the constraint relaxation and user-write policies are in place.
+
+Reference: [Build a Supabase Integration](https://supabase.com/docs/guides/integrations/build-a-supabase-oauth-integration).
 
 ## Alternatives considered
 

@@ -51,6 +51,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@buendia/db':
+        specifier: workspace:*
+        version: link:../../packages/db
       '@buendia/shared':
         specifier: workspace:*
         version: link:../../packages/shared

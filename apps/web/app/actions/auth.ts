@@ -2,6 +2,7 @@
 
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { recordAudit } from "@buendia/db";
 import { createClient } from "@/lib/supabase/server";
 
 export type AuthState = { error: string } | undefined;
@@ -29,9 +30,12 @@ async function requestOrigin(): Promise<string> {
 export async function signInAction(_previous: AuthState, formData: FormData): Promise<AuthState> {
   const { email, password } = readCredentials(formData);
   const supabase = await createClient();
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) {
     return { error: error.message };
+  }
+  if (data.user) {
+    await recordAudit(supabase, { actorId: data.user.id, action: "auth.signed_in" });
   }
   redirect("/");
 }
@@ -40,13 +44,16 @@ export async function signUpAction(_previous: AuthState, formData: FormData): Pr
   const { email, password } = readCredentials(formData);
   const supabase = await createClient();
   const origin = await requestOrigin();
-  const { error } = await supabase.auth.signUp({
+  const { data, error } = await supabase.auth.signUp({
     email,
     password,
     options: { emailRedirectTo: `${origin}/auth/callback` },
   });
   if (error) {
     return { error: error.message };
+  }
+  if (data.user) {
+    await recordAudit(supabase, { actorId: data.user.id, action: "auth.signed_up" });
   }
   redirect("/");
 }

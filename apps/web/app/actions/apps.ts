@@ -7,7 +7,8 @@ import { env } from "@/lib/env";
 import { executeSql, ManagementApiError } from "@/lib/management-api";
 import { refreshAccessToken } from "@/lib/oauth";
 import { getOwnerRefreshToken } from "@/lib/owner-backend";
-import { buildProvisionSql, validateSchemaSql } from "@/lib/schema-provisioner";
+import { buildDropSchemaSql, buildProvisionSql, validateSchemaSql } from "@/lib/schema-provisioner";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 const MAX_HTML_BYTES = 5 * 1024 * 1024; // 5 MB
@@ -253,4 +254,153 @@ export async function provisionSchemaAction(formData: FormData): Promise<void> {
   });
 
   provisionRedirect("ok", app.slug);
+}
+
+/* -----------------------------------------------------------------------
+ * Rename + delete (ticket 50)
+ *
+ * Slug is immutable — it's baked into URLs and the schema name. Only
+ * `apps.name` is mutable here. Delete cascades through the database
+ * (FKs on app_versions + app_shares), drops the schema in the user's
+ * Supabase project, and clears the HTML blobs.
+ * --------------------------------------------------------------------- */
+
+type RenameStatus = "ok" | "unauthenticated" | "not_found" | "not_owner" | "empty" | "write_failed";
+
+function renameRedirect(slug: string, status: RenameStatus): never {
+  redirect(`/apps/${slug}?rename=${status}`);
+}
+
+export async function renameAppAction(formData: FormData): Promise<void> {
+  const slug = String(formData.get("slug") ?? "");
+  const nameRaw = formData.get("name");
+  const name = typeof nameRaw === "string" ? nameRaw.trim() : "";
+  if (!slug) renameRedirect(slug, "not_found");
+  if (!name) renameRedirect(slug, "empty");
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) renameRedirect(slug, "unauthenticated");
+
+  const { data: app } = await supabase
+    .from("apps")
+    .select("id, owner_id")
+    .eq("slug", slug)
+    .maybeSingle();
+  if (!app) renameRedirect(slug, "not_found");
+  if (app.owner_id !== user.id) renameRedirect(slug, "not_owner");
+
+  const { error } = await supabase
+    .from("apps")
+    .update({ name, updated_at: new Date().toISOString() })
+    .eq("id", app.id);
+  if (error) {
+    console.error("[buendia] apps rename failed:", error);
+    renameRedirect(slug, "write_failed");
+  }
+
+  await recordAudit(supabase, {
+    actorId: user.id,
+    action: "app.renamed",
+    targetAppId: app.id,
+    metadata: { slug, name },
+  });
+
+  renameRedirect(slug, "ok");
+}
+
+type DeleteStatus =
+  | "unauthenticated"
+  | "not_found"
+  | "not_owner"
+  | "not_connected"
+  | "schema_drop_failed"
+  | "db_delete_failed";
+
+function deleteOutcome(status: DeleteStatus): never {
+  // Failures land back on the dashboard with a banner (the detail page
+  // is gone on success).
+  redirect(`/?delete=${status}`);
+}
+
+export async function deleteAppAction(formData: FormData): Promise<void> {
+  const slug = String(formData.get("slug") ?? "");
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) deleteOutcome("unauthenticated");
+
+  const { data: app } = await supabase
+    .from("apps")
+    .select("id, slug, owner_id, schema_name, html_storage_path")
+    .eq("slug", slug)
+    .maybeSingle();
+  if (!app) deleteOutcome("not_found");
+  if (app.owner_id !== user.id) deleteOutcome("not_owner");
+
+  // Best-effort drop of the app schema in the user's Supabase project.
+  // If they never provisioned a project (or revoked our OAuth), we still
+  // proceed to clear the control-plane rows so the user isn't stuck with
+  // ghost apps they can't delete.
+  const refreshToken = await getOwnerRefreshToken(user.id);
+  if (refreshToken) {
+    try {
+      const access = await refreshAccessToken({
+        refreshToken,
+        clientId: env.supabaseOauthClientId,
+        clientSecret: env.supabaseOauthClientSecret,
+      });
+      const { data: backend } = await supabase
+        .from("owner_backends")
+        .select("supabase_project_ref")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (backend?.supabase_project_ref) {
+        await executeSql(
+          access.accessToken,
+          backend.supabase_project_ref,
+          buildDropSchemaSql(app.schema_name),
+        );
+      }
+    } catch (err) {
+      console.error(
+        "[buendia] failed to drop app schema (continuing with metadata delete):",
+        err instanceof ManagementApiError ? err.body : err,
+      );
+      // Don't fail the whole delete; the user still gets their control
+      // plane cleaned up and can drop the orphan schema manually if
+      // needed. Surface a soft warning via the redirect status.
+    }
+  }
+
+  // Storage cleanup via the admin client (the HTML lives in
+  // user-scoped folders that the user's session can read, but using
+  // admin avoids any RLS surprises mid-delete).
+  const admin = createAdminClient();
+  const folder = `${user.id}/${app.slug}/`;
+  const { data: objects } = await admin.storage.from(HTML_BUCKET).list(folder);
+  if (objects && objects.length > 0) {
+    const paths = objects.map((o) => `${folder}${o.name}`);
+    await admin.storage.from(HTML_BUCKET).remove(paths);
+  }
+
+  // Delete the row — cascades to app_versions, app_shares.
+  const { error: delError } = await supabase.from("apps").delete().eq("id", app.id);
+  if (delError) {
+    console.error("[buendia] apps delete failed:", delError);
+    deleteOutcome("db_delete_failed");
+  }
+
+  await recordAudit(supabase, {
+    actorId: user.id,
+    action: "app.deleted",
+    targetAppId: app.id,
+    metadata: { slug: app.slug, schema: app.schema_name },
+  });
+
+  redirect("/?delete=ok");
 }

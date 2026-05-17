@@ -132,3 +132,45 @@ export async function provisionProjectAction(): Promise<void> {
 
   finish("ok");
 }
+
+/* -----------------------------------------------------------------------
+ * Disconnect (ticket 52)
+ *
+ * The user wants out. We:
+ *
+ *   1. Delete the owner_backends row (encrypted credentials gone with it).
+ *   2. Emit a backend.disconnected audit row.
+ *   3. Redirect to /settings with an ok banner.
+ *
+ * Apps the user owned stay in the dashboard but lose serving capacity
+ * (the edge route sees a missing owner_backends row and returns the
+ * "App not ready" page). They can reconnect Supabase to bring serving
+ * back. Schemas + data in their Supabase project are untouched —
+ * disconnecting only ends Buendia's involvement.
+ *
+ * We don't attempt to revoke the OAuth grant at Supabase from here.
+ * The user can revoke from Supabase's dashboard if they want; doing
+ * it for them via a Supabase revoke endpoint is a follow-up if it
+ * turns out to matter.
+ * --------------------------------------------------------------------- */
+
+export async function disconnectBuendiaAction(): Promise<void> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/signin");
+
+  const { error } = await supabase.from("owner_backends").delete().eq("user_id", user.id);
+  if (error) {
+    console.error("[buendia] disconnect failed:", error);
+    redirect("/settings?disconnect=write_failed");
+  }
+
+  await recordAudit(supabase, {
+    actorId: user.id,
+    action: "backend.disconnected",
+  });
+
+  redirect("/settings?disconnect=ok");
+}

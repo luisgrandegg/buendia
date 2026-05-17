@@ -71,8 +71,19 @@ const provisionMessages: Record<string, { tone: "ok" | "warn"; text: string }> =
   },
 };
 
+const disconnectMessages: Record<string, { tone: "ok" | "warn"; text: string }> = {
+  ok: {
+    tone: "ok",
+    text: "Disconnected. Your Supabase project + data are untouched and will keep running.",
+  },
+  write_failed: {
+    tone: "warn",
+    text: "Couldn't clear the stored credentials. Please try again.",
+  },
+};
+
 interface PageProps {
-  searchParams: Promise<{ supabase?: string; provision?: string }>;
+  searchParams: Promise<{ supabase?: string; provision?: string; disconnect?: string }>;
 }
 
 export default async function SettingsPage({ searchParams }: PageProps) {
@@ -82,8 +93,13 @@ export default async function SettingsPage({ searchParams }: PageProps) {
   } = await supabase.auth.getUser();
 
   const status = user ? await getOwnerBackendStatus(user.id) : null;
-  const { supabase: supabaseParam, provision: provisionParam } = await searchParams;
+  const {
+    supabase: supabaseParam,
+    provision: provisionParam,
+    disconnect: disconnectParam,
+  } = await searchParams;
   const banner =
+    (disconnectParam && disconnectMessages[disconnectParam]) ||
     (provisionParam && provisionMessages[provisionParam]) ||
     (supabaseParam && supabaseMessages[supabaseParam]) ||
     undefined;
@@ -136,6 +152,33 @@ export default async function SettingsPage({ searchParams }: PageProps) {
           <ProvisionProjectCta connectedAt={status.connectedAt} />
         )}
       </section>
+
+      {status?.exists ? (
+        <section style={{ marginTop: "2.5rem" }}>
+          <h2 style={{ fontSize: "1rem", marginBottom: "0.5rem", color: "#991b1b" }}>
+            Danger zone
+          </h2>
+          <p style={{ color: "#4b5563", fontSize: "0.9375rem", margin: "0 0 0.75rem 0" }}>
+            Disconnect Buendia from your Supabase account. Your project and data stay; we just stop
+            being involved.
+          </p>
+          <a
+            href="/settings/disconnect"
+            style={{
+              display: "inline-block",
+              padding: "0.5rem 1rem",
+              borderRadius: "0.375rem",
+              border: "1px solid #fecaca",
+              background: "white",
+              color: "#b91c1c",
+              fontSize: "0.9375rem",
+              textDecoration: "none",
+            }}
+          >
+            Disconnect Buendia…
+          </a>
+        </section>
+      ) : null}
     </div>
   );
 }

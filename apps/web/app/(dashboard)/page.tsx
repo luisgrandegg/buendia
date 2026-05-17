@@ -1,3 +1,4 @@
+import { provisionSchemaAction } from "@/app/actions/apps";
 import { createClient } from "@/lib/supabase/server";
 import { getOwnerBackendStatus } from "@/lib/owner-backend";
 import { UploadForm } from "./_components/upload-form";
@@ -6,10 +7,14 @@ import { EmptyState } from "./_components/empty-state";
 export const metadata = { title: "My apps · Buendia" };
 
 interface PageProps {
-  searchParams: Promise<{ upload?: string; slug?: string }>;
+  searchParams: Promise<{
+    upload?: string;
+    provision_schema?: string;
+    slug?: string;
+  }>;
 }
 
-const bannerMessages: Record<string, { tone: "ok" | "warn"; text: (slug?: string) => string }> = {
+const uploadMessages: Record<string, { tone: "ok" | "warn"; text: (slug?: string) => string }> = {
   ok: {
     tone: "ok",
     text: (slug) => `Uploaded${slug ? ` (slug: ${slug})` : ""}. Serving lands in ticket 22.`,
@@ -24,6 +29,39 @@ const bannerMessages: Record<string, { tone: "ok" | "warn"; text: (slug?: string
   db_failed: { tone: "warn", text: () => "Buendia couldn't register the app. Please try again." },
 };
 
+const provisionMessages: Record<string, { tone: "ok" | "warn"; text: (slug?: string) => string }> =
+  {
+    ok: {
+      tone: "ok",
+      text: (slug) => `Schema provisioned${slug ? ` for ${slug}` : ""}.`,
+    },
+    unauthenticated: { tone: "warn", text: () => "Sign in and try again." },
+    not_found: { tone: "warn", text: () => "Couldn't find that app." },
+    not_connected: {
+      tone: "warn",
+      text: () => "Provision a Supabase project in Settings before running schemas.",
+    },
+    no_schema: {
+      tone: "warn",
+      text: (slug) =>
+        `The latest version of ${slug ?? "this app"} has no schema.sql. Upload a new version with one to provision.`,
+    },
+    schema_invalid: {
+      tone: "warn",
+      text: (slug) =>
+        `The schema.sql for ${slug ?? "this app"} contains a forbidden statement (RLS disable, GRANT, role manipulation, etc.). Fix and re-upload.`,
+    },
+    oauth_refresh_failed: {
+      tone: "warn",
+      text: () => "Supabase refused the stored credentials. Reconnect from Settings.",
+    },
+    sql_failed: {
+      tone: "warn",
+      text: (slug) =>
+        `Supabase rejected the schema for ${slug ?? "this app"}. Check the server logs for the SQL error.`,
+    },
+  };
+
 export default async function MyAppsPage({ searchParams }: PageProps) {
   const supabase = await createClient();
   const {
@@ -33,11 +71,14 @@ export default async function MyAppsPage({ searchParams }: PageProps) {
 
   const { data: apps } = await supabase
     .from("apps")
-    .select("id, slug, name, current_version, created_at")
+    .select("id, slug, name, current_version, created_at, schema_provisioned_at")
     .order("created_at", { ascending: false });
 
-  const { upload, slug } = await searchParams;
-  const banner = upload ? bannerMessages[upload] : undefined;
+  const params = await searchParams;
+  const banner =
+    (params.provision_schema && provisionMessages[params.provision_schema]) ||
+    (params.upload && uploadMessages[params.upload]) ||
+    undefined;
 
   return (
     <div>
@@ -58,7 +99,7 @@ export default async function MyAppsPage({ searchParams }: PageProps) {
             fontSize: "0.9375rem",
           }}
         >
-          {banner.text(slug)}
+          {banner.text(params.slug)}
         </div>
       ) : null}
 
@@ -94,6 +135,7 @@ interface AppRow {
   name: string;
   current_version: number;
   created_at: string;
+  schema_provisioned_at: string | null;
 }
 
 function AppList({ apps }: { apps: AppRow[] }) {
@@ -111,27 +153,52 @@ function AppList({ apps }: { apps: AppRow[] }) {
             borderRadius: "0.375rem",
             marginBottom: "0.5rem",
             fontSize: "0.9375rem",
+            gap: "1rem",
           }}
         >
-          <div>
+          <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontWeight: 500 }}>{app.name}</div>
             <div style={{ color: "#6b7280", fontSize: "0.8125rem" }}>
               slug: <code>{app.slug}</code> · v{app.current_version} ·{" "}
               {new Date(app.created_at).toLocaleString()}
             </div>
+            <div style={{ color: "#6b7280", fontSize: "0.8125rem", marginTop: "0.125rem" }}>
+              {app.schema_provisioned_at
+                ? `schema provisioned ${new Date(app.schema_provisioned_at).toLocaleString()}`
+                : "schema not yet provisioned"}
+            </div>
           </div>
-          <span
-            style={{
-              fontSize: "0.8125rem",
-              color: "#6b7280",
-              fontStyle: "italic",
-            }}
-            title="The /a/<slug> serve route lands in ticket 22."
-          >
-            Open arrives in ticket 22
-          </span>
+
+          <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+            <form action={provisionSchemaAction}>
+              <input type="hidden" name="app_id" value={app.id} />
+              <button type="submit" style={secondaryButtonStyle}>
+                {app.schema_provisioned_at ? "Re-provision" : "Provision schema"}
+              </button>
+            </form>
+            <span
+              style={{
+                fontSize: "0.8125rem",
+                color: "#6b7280",
+                fontStyle: "italic",
+              }}
+              title="The /a/<slug> serve route lands in ticket 22."
+            >
+              Open arrives in ticket 22
+            </span>
+          </div>
         </li>
       ))}
     </ul>
   );
 }
+
+const secondaryButtonStyle = {
+  padding: "0.375rem 0.75rem",
+  borderRadius: "0.375rem",
+  border: "1px solid #d1d5db",
+  background: "white",
+  color: "#111827",
+  fontSize: "0.875rem",
+  cursor: "pointer",
+} as const;

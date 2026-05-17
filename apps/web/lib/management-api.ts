@@ -200,3 +200,20 @@ export async function getProjectJwtSecret(
 export function projectUrl(projectRef: string): string {
   return `https://${projectRef}.supabase.co`;
 }
+
+/**
+ * Run arbitrary SQL against the project's Postgres database. Used by the
+ * schema provisioner (ticket 21). The Management API accepts a single
+ * `query` string and returns the rows from the final statement.
+ */
+export async function executeSql<T = unknown>(
+  accessToken: string,
+  projectRef: string,
+  query: string,
+): Promise<T> {
+  return callManagementApi<T>(`/v1/projects/${projectRef}/database/query`, {
+    accessToken,
+    method: "POST",
+    body: { query },
+  });
+}

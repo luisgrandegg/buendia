@@ -73,15 +73,12 @@ export async function init(): Promise<BuendiaClient> {
     throw new Error("Buendia.init() must run in the browser");
   }
 
-  const config = window.__APP_CONFIG__;
-  if (!config) {
-    throw new Error(
-      "Buendia: window.__APP_CONFIG__ is missing. " +
-        "Open this app from Buendia (e.g. /a/<slug>), or wait for the standalone overlay (ticket 24).",
-    );
+  if (window.__APP_CONFIG__) {
+    return buildHostedClient(window.__APP_CONFIG__);
   }
 
-  return buildHostedClient(config);
+  const standalone = readStandaloneConfig() ?? (await promptStandaloneConfig());
+  return buildStandaloneClient(standalone);
 }
 
 function buildHostedClient(config: BuendiaAppConfig): BuendiaClient {
@@ -167,6 +164,213 @@ function makeSubscribe(db: SupabaseClient, schema: string): BuendiaClient["subsc
     return () => {
       void db.removeChannel(channel);
     };
+  };
+}
+
+/* -----------------------------------------------------------------------
+ * Standalone mode (ticket 24)
+ *
+ * When an app is opened from `file://`, a static host, or anywhere
+ * without Buendia injecting `window.__APP_CONFIG__`, we render a setup
+ * overlay that asks for a Supabase URL + publishable key + schema, then
+ * use those values directly. There's no per-user JWT, no refresh, no
+ * revocation. App data security falls back entirely on RLS — that's a
+ * knowing degradation. The constitution allows it precisely so apps
+ * stay portable.
+ * --------------------------------------------------------------------- */
+
+const STANDALONE_LOCAL_STORAGE_KEY = "buendia:standalone";
+
+interface StandaloneConfig {
+  supabaseUrl: string;
+  publishableKey: string;
+  schema: string;
+}
+
+function readStandaloneConfig(): StandaloneConfig | null {
+  if (typeof localStorage === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(STANDALONE_LOCAL_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<StandaloneConfig>;
+    if (!parsed.supabaseUrl || !parsed.publishableKey || !parsed.schema) {
+      return null;
+    }
+    return {
+      supabaseUrl: parsed.supabaseUrl,
+      publishableKey: parsed.publishableKey,
+      schema: parsed.schema,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function persistStandaloneConfig(config: StandaloneConfig): void {
+  if (typeof localStorage === "undefined") return;
+  try {
+    localStorage.setItem(STANDALONE_LOCAL_STORAGE_KEY, JSON.stringify(config));
+  } catch {
+    // Some environments (private mode, certain webviews) deny
+    // localStorage. The session still works for the lifetime of the
+    // current page; the user just has to re-enter on reload.
+  }
+}
+
+function promptStandaloneConfig(): Promise<StandaloneConfig> {
+  if (typeof document === "undefined") {
+    return Promise.reject(new Error("Buendia: standalone overlay needs a DOM"));
+  }
+
+  return new Promise<StandaloneConfig>((resolve) => {
+    const overlay = document.createElement("div");
+    overlay.id = "buendia-standalone-overlay";
+    overlay.setAttribute("role", "dialog");
+    overlay.setAttribute("aria-modal", "true");
+    overlay.setAttribute("aria-labelledby", "buendia-standalone-title");
+
+    Object.assign(overlay.style, {
+      position: "fixed",
+      inset: "0",
+      background: "rgba(17, 24, 39, 0.75)",
+      backdropFilter: "blur(4px)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      zIndex: "2147483647",
+      fontFamily: "system-ui, -apple-system, sans-serif",
+      color: "#111827",
+      padding: "1.5rem",
+    });
+
+    overlay.innerHTML = `
+      <form id="buendia-standalone-form" style="
+        background:white;border-radius:0.5rem;padding:1.5rem 1.75rem;
+        max-width:28rem;width:100%;
+        box-shadow:0 20px 50px -10px rgba(0,0,0,0.4);
+      ">
+        <h1 id="buendia-standalone-title" style="font-size:1.125rem;margin:0 0 0.5rem 0;">
+          Connect this app to a Supabase project
+        </h1>
+        <p style="color:#4b5563;margin:0 0 1.25rem 0;font-size:0.9375rem;line-height:1.5;">
+          This app is running outside of Buendia. Point it at a Supabase project you control.
+          Stored locally; nothing is sent to Buendia.
+        </p>
+
+        <label style="display:block;font-size:0.875rem;margin-bottom:0.375rem;">
+          Supabase project URL
+        </label>
+        <input name="url" type="url" required placeholder="https://your-project.supabase.co"
+          style="width:100%;padding:0.5rem 0.75rem;border-radius:0.375rem;
+                 border:1px solid #d1d5db;font-size:0.9375rem;margin-bottom:0.875rem;
+                 box-sizing:border-box;" />
+
+        <label style="display:block;font-size:0.875rem;margin-bottom:0.375rem;">
+          Publishable key (sb_publishable_…)
+        </label>
+        <input name="key" type="text" required placeholder="sb_publishable_…"
+          style="width:100%;padding:0.5rem 0.75rem;border-radius:0.375rem;
+                 border:1px solid #d1d5db;font-size:0.9375rem;
+                 font-family:ui-monospace,monospace;margin-bottom:0.875rem;
+                 box-sizing:border-box;" />
+
+        <label style="display:block;font-size:0.875rem;margin-bottom:0.375rem;">
+          Schema name
+        </label>
+        <input name="schema" type="text" required placeholder="app_my_slug" pattern="^[a-z][a-z0-9_]*$"
+          style="width:100%;padding:0.5rem 0.75rem;border-radius:0.375rem;
+                 border:1px solid #d1d5db;font-size:0.9375rem;
+                 font-family:ui-monospace,monospace;margin-bottom:1rem;
+                 box-sizing:border-box;" />
+
+        <p style="background:#fef3c7;border:1px solid #fde68a;color:#92400e;
+                  padding:0.625rem 0.75rem;border-radius:0.375rem;
+                  font-size:0.8125rem;margin:0 0 1rem 0;line-height:1.5;">
+          Standalone mode uses the publishable key directly. Security depends entirely on
+          your project's RLS policies. To get per-user auth and revocation, host the app on
+          Buendia.
+        </p>
+
+        <div style="display:flex;justify-content:flex-end;">
+          <button type="submit" style="
+            padding:0.5rem 1rem;border-radius:0.375rem;border:1px solid #111827;
+            background:#111827;color:white;font-size:0.9375rem;cursor:pointer;
+          ">Connect</button>
+        </div>
+      </form>
+    `;
+
+    document.body.appendChild(overlay);
+
+    const form = overlay.querySelector<HTMLFormElement>("#buendia-standalone-form");
+    form?.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const data = new FormData(form);
+      const supabaseUrl = String(data.get("url") ?? "").trim();
+      const publishableKey = String(data.get("key") ?? "").trim();
+      const schema = String(data.get("schema") ?? "").trim();
+
+      if (!supabaseUrl || !publishableKey || !schema) return;
+
+      const config: StandaloneConfig = { supabaseUrl, publishableKey, schema };
+      persistStandaloneConfig(config);
+      overlay.remove();
+      resolve(config);
+    });
+  });
+}
+
+function buildStandaloneClient(config: StandaloneConfig): BuendiaClient {
+  const headers: Record<string, string> = {
+    "Accept-Profile": config.schema,
+    "Content-Profile": config.schema,
+  };
+
+  const db = createClient(config.supabaseUrl, config.publishableKey, {
+    global: { headers },
+    db: { schema: config.schema as never },
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
+  });
+
+  const subscribe = makeSubscribe(db, config.schema);
+
+  return {
+    mode: "standalone",
+    db,
+    // Standalone mode has no per-user identity — there's no Buendia JWT
+    // mint, no auth. App authors should not rely on `user.id`. We fill
+    // an "anonymous" sentinel so the surface stays stable across modes.
+    user: {
+      id: "anonymous",
+      email: "",
+      role: "viewer",
+    },
+    app: {
+      id: config.schema,
+      name: config.schema,
+      slug: config.schema,
+    },
+    subscribe,
+    raw: {
+      hosted: true,
+      supabaseUrl: config.supabaseUrl,
+      publishableKey: config.publishableKey,
+      jwt: "",
+      jwtExp: 0,
+      user: { id: "anonymous", email: "", role: "viewer" },
+      app: {
+        id: config.schema,
+        name: config.schema,
+        slug: config.schema,
+        schema: config.schema,
+        teamId: "anonymous",
+      },
+      refreshUrl: "",
+    },
   };
 }
 

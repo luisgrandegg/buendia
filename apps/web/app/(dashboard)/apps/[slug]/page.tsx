@@ -1,6 +1,13 @@
+import { headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
-import { inviteCollaboratorAction, removeCollaboratorAction } from "@/app/actions/shares";
+import {
+  cancelInvitationAction,
+  inviteCollaboratorAction,
+  removeCollaboratorAction,
+} from "@/app/actions/shares";
 import { deleteAppAction, provisionSchemaAction, renameAppAction } from "@/app/actions/apps";
+import { invitationUrl } from "@/lib/invitations";
+import { originFromHeaders } from "@/lib/oauth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -19,22 +26,22 @@ const renameMessages: Record<string, { tone: "ok" | "warn"; text: string }> = {
 };
 
 const shareMessages: Record<string, { tone: "ok" | "warn"; text: string }> = {
-  ok_invited: { tone: "ok", text: "Invitation added." },
+  ok_invited: { tone: "ok", text: "Collaborator added." },
+  ok_invited_email: {
+    tone: "ok",
+    text: "Invitation created. Copy the link below to share it.",
+  },
   ok_role_changed: { tone: "ok", text: "Role updated." },
   ok_removed: { tone: "ok", text: "Collaborator removed." },
+  ok_invitation_removed: { tone: "ok", text: "Invitation cancelled." },
   unauthenticated: { tone: "warn", text: "Sign in and try again." },
   missing_email: { tone: "warn", text: "Enter an email to invite." },
-  user_not_found: {
-    tone: "warn",
-    text: "No Buendia account uses that email yet. Email invitations land with ticket 31; for now, ask them to sign up first.",
-  },
   self_invite: {
     tone: "warn",
     text: "You're the owner of this app — there's nothing to invite yourself to.",
   },
   not_owner: { tone: "warn", text: "Only the owner can manage sharing." },
   not_found: { tone: "warn", text: "Couldn't find that share." },
-  already_member: { tone: "warn", text: "They already have access." },
   write_failed: { tone: "warn", text: "Couldn't save the change. Please try again." },
 };
 
@@ -112,6 +119,27 @@ export default async function AppDetailPage({ params, searchParams }: PageProps)
         granted_at: s.granted_at,
         email: (s.users as { email?: string } | null)?.email ?? "(unknown)",
       })) ?? [];
+  }
+
+  // Pending invitations — owner only.
+  let pendingInvitations: {
+    id: string;
+    email: string;
+    role: string;
+    token: string;
+    expires_at: string;
+  }[] = [];
+  let pendingOrigin = "";
+  if (isOwner) {
+    const { data: invitations } = await supabase
+      .from("invitations")
+      .select("id, email, role, token, expires_at")
+      .eq("app_id", app.id)
+      .order("created_at", { ascending: false });
+    pendingInvitations = invitations ?? [];
+    if (pendingInvitations.length > 0) {
+      pendingOrigin = originFromHeaders(await headers());
+    }
   }
 
   const banner =
@@ -211,6 +239,69 @@ export default async function AppDetailPage({ params, searchParams }: PageProps)
             ))}
           </ul>
 
+          {pendingInvitations.length > 0 ? (
+            <div style={{ margin: "1rem 0" }}>
+              <h3
+                style={{
+                  fontSize: "0.875rem",
+                  color: "#6b7280",
+                  margin: "0 0 0.5rem 0",
+                  fontWeight: 500,
+                }}
+              >
+                Pending invitations
+              </h3>
+              <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
+                {pendingInvitations.map((inv) => (
+                  <li
+                    key={inv.id}
+                    style={{
+                      padding: "0.625rem 0.875rem",
+                      border: "1px solid #fde68a",
+                      background: "#fffbeb",
+                      borderRadius: "0.375rem",
+                      marginBottom: "0.375rem",
+                      fontSize: "0.9375rem",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        gap: "0.5rem",
+                      }}
+                    >
+                      <div>
+                        <strong>{inv.email}</strong> · {inv.role} · expires{" "}
+                        {new Date(inv.expires_at).toLocaleDateString()}
+                      </div>
+                      <form action={cancelInvitationAction}>
+                        <input type="hidden" name="slug" value={app.slug} />
+                        <input type="hidden" name="invitation_id" value={inv.id} />
+                        <button type="submit" style={dangerButtonStyle}>
+                          Cancel
+                        </button>
+                      </form>
+                    </div>
+                    <div
+                      style={{
+                        marginTop: "0.5rem",
+                        fontSize: "0.8125rem",
+                        color: "#78350f",
+                        fontFamily: "ui-monospace, monospace",
+                        wordBreak: "break-all",
+                        userSelect: "all",
+                      }}
+                    >
+                      {invitationUrl(pendingOrigin, inv.token)}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
           <form action={inviteCollaboratorAction} style={{ display: "flex", gap: "0.5rem" }}>
             <input type="hidden" name="slug" value={app.slug} />
             <input
@@ -229,8 +320,9 @@ export default async function AppDetailPage({ params, searchParams }: PageProps)
             </button>
           </form>
           <p style={{ color: "#6b7280", margin: "0.5rem 0 0 0", fontSize: "0.8125rem" }}>
-            Invitees must already have a Buendia account. Email-driven invitations for new users
-            land with ticket 31.
+            Invitees with a Buendia account get access immediately. Otherwise, an invite link
+            appears under <em>Pending invitations</em>; copy and share it. Once they sign up via the
+            link, they show up in the collaborators list.
           </p>
         </section>
       ) : null}

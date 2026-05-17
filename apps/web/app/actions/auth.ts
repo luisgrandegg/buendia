@@ -27,8 +27,19 @@ async function requestOrigin(): Promise<string> {
   return `${proto}://${host}`;
 }
 
+function readInvitationToken(formData: FormData): string | null {
+  const raw = formData.get("invitation_token");
+  if (typeof raw !== "string" || !raw.trim()) return null;
+  return raw.trim();
+}
+
+function postAuthDestination(invitationToken: string | null): string {
+  return invitationToken ? `/invite?token=${encodeURIComponent(invitationToken)}` : "/";
+}
+
 export async function signInAction(_previous: AuthState, formData: FormData): Promise<AuthState> {
   const { email, password } = readCredentials(formData);
+  const invitationToken = readInvitationToken(formData);
   const supabase = await createClient();
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) {
@@ -37,11 +48,12 @@ export async function signInAction(_previous: AuthState, formData: FormData): Pr
   if (data.user) {
     await recordAudit(supabase, { actorId: data.user.id, action: "auth.signed_in" });
   }
-  redirect("/");
+  redirect(postAuthDestination(invitationToken));
 }
 
 export async function signUpAction(_previous: AuthState, formData: FormData): Promise<AuthState> {
   const { email, password } = readCredentials(formData);
+  const invitationToken = readInvitationToken(formData);
   const supabase = await createClient();
   const origin = await requestOrigin();
   const { data, error } = await supabase.auth.signUp({
@@ -55,7 +67,7 @@ export async function signUpAction(_previous: AuthState, formData: FormData): Pr
   if (data.user) {
     await recordAudit(supabase, { actorId: data.user.id, action: "auth.signed_up" });
   }
-  redirect("/");
+  redirect(postAuthDestination(invitationToken));
 }
 
 export async function signOutAction(): Promise<void> {

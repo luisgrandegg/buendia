@@ -11,6 +11,8 @@ interface AuthFormProps {
   altPrompt: string;
   altHref: string;
   altLabel: string;
+  defaultEmail?: string;
+  invitationToken?: string;
 }
 
 const fieldStyle = {
@@ -35,6 +37,8 @@ export function AuthForm({
   altPrompt,
   altHref,
   altLabel,
+  defaultEmail,
+  invitationToken,
 }: AuthFormProps) {
   const [state, formAction, pending] = useActionState<AuthState, FormData>(action, undefined);
 
@@ -42,7 +46,26 @@ export function AuthForm({
     <div>
       <h1 style={{ fontSize: "1.5rem", marginBottom: "1.5rem" }}>{title}</h1>
 
+      {invitationToken ? (
+        <p
+          style={{
+            background: "#eff6ff",
+            border: "1px solid #bfdbfe",
+            color: "#1e3a8a",
+            padding: "0.625rem 0.75rem",
+            borderRadius: "0.375rem",
+            fontSize: "0.875rem",
+            marginBottom: "1rem",
+          }}
+        >
+          You've been invited to a Buendia app. Sign in or sign up with the invited email to accept.
+        </p>
+      ) : null}
+
       <form action={formAction} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+        {invitationToken ? (
+          <input type="hidden" name="invitation_token" value={invitationToken} />
+        ) : null}
         <div>
           <label htmlFor="email" style={labelStyle}>
             Email
@@ -53,6 +76,7 @@ export function AuthForm({
             type="email"
             autoComplete="email"
             required
+            defaultValue={defaultEmail ?? ""}
             style={fieldStyle}
           />
         </div>

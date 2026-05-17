@@ -11,6 +11,8 @@ export default tseslint.config(
       "**/.turbo/**",
       "**/coverage/**",
       "**/*.d.ts",
+      // SDK bundle synced into apps/web/public/sdk by sync-sdk.mjs.
+      "apps/web/public/sdk/**",
     ],
   },
   js.configs.recommended,
@@ -21,6 +23,21 @@ export default tseslint.config(
         "error",
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
       ],
+    },
+  },
+  {
+    // Node scripts (no DOM globals; have `process`, `console`, etc.).
+    files: ["**/scripts/**/*.{js,mjs,cjs}", "**/*.config.{js,mjs,cjs}"],
+    languageOptions: {
+      globals: {
+        process: "readonly",
+        console: "readonly",
+        Buffer: "readonly",
+        __dirname: "readonly",
+        __filename: "readonly",
+        require: "readonly",
+        module: "readonly",
+      },
     },
   },
 );

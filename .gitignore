@@ -7,6 +7,9 @@ out
 .next
 .turbo
 
+# SDK bundle is synced from packages/sdk/dist by apps/web/scripts/sync-sdk.mjs.
+apps/web/public/sdk
+
 .env
 .env.local
 .env.*.local

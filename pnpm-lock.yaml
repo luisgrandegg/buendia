@@ -100,6 +100,9 @@ importers:
       '@buendia/shared':
         specifier: workspace:*
         version: link:../shared
+      '@supabase/supabase-js':
+        specifier: ^2.47.10
+        version: 2.105.4
     devDependencies:
       tsup:
         specifier: ^8.3.5

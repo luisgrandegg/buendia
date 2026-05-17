@@ -142,7 +142,13 @@ type ProvisionStatus =
   | "sql_failed";
 
 function provisionRedirect(status: ProvisionStatus, slug?: string): never {
-  const params = new URLSearchParams({ provision_schema: status, ...(slug ? { slug } : {}) });
+  // Prefer the app detail page if we have a slug; otherwise fall back to
+  // the dashboard, which also surfaces the provision_schema banner.
+  if (slug) {
+    const params = new URLSearchParams({ provision_schema: status });
+    redirect(`/apps/${slug}?${params.toString()}`);
+  }
+  const params = new URLSearchParams({ provision_schema: status });
   redirect(`/?${params.toString()}`);
 }
 

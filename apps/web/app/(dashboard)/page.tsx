@@ -1,4 +1,4 @@
-import { provisionSchemaAction } from "@/app/actions/apps";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getOwnerBackendStatus } from "@/lib/owner-backend";
 import { UploadForm } from "./_components/upload-form";
@@ -158,7 +158,12 @@ function AppList({ apps }: { apps: AppRow[] }) {
           }}
         >
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontWeight: 500 }}>{app.name}</div>
+            <Link
+              href={`/apps/${app.slug}`}
+              style={{ fontWeight: 500, textDecoration: "none", color: "inherit" }}
+            >
+              {app.name}
+            </Link>
             <div style={{ color: "#6b7280", fontSize: "0.8125rem" }}>
               slug: <code>{app.slug}</code> · v{app.current_version} ·{" "}
               {new Date(app.created_at).toLocaleString()}
@@ -171,12 +176,12 @@ function AppList({ apps }: { apps: AppRow[] }) {
           </div>
 
           <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-            <form action={provisionSchemaAction}>
-              <input type="hidden" name="app_id" value={app.id} />
-              <button type="submit" style={secondaryButtonStyle}>
-                {app.schema_provisioned_at ? "Re-provision" : "Provision schema"}
-              </button>
-            </form>
+            <Link
+              href={`/apps/${app.slug}`}
+              style={{ ...secondaryButtonStyle, textDecoration: "none", display: "inline-block" }}
+            >
+              Manage
+            </Link>
             <a
               href={`/a/${app.slug}`}
               target="_blank"

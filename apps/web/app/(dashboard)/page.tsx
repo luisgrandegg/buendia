@@ -11,8 +11,29 @@ interface PageProps {
     upload?: string;
     provision_schema?: string;
     slug?: string;
+    delete?: string;
   }>;
 }
+
+const deleteMessages: Record<string, { tone: "ok" | "warn"; text: (slug?: string) => string }> = {
+  ok: { tone: "ok", text: () => "App deleted." },
+  unauthenticated: { tone: "warn", text: () => "Sign in and try again." },
+  not_found: { tone: "warn", text: () => "Couldn't find that app." },
+  not_owner: { tone: "warn", text: () => "Only the owner can delete this app." },
+  not_connected: {
+    tone: "warn",
+    text: () => "Couldn't reach your Supabase project to drop the schema.",
+  },
+  schema_drop_failed: {
+    tone: "warn",
+    text: () =>
+      "Dropping the app's schema in your Supabase project failed; the metadata stays put until you retry.",
+  },
+  db_delete_failed: {
+    tone: "warn",
+    text: () => "Couldn't delete the app record. Please try again.",
+  },
+};
 
 const uploadMessages: Record<string, { tone: "ok" | "warn"; text: (slug?: string) => string }> = {
   ok: {
@@ -77,6 +98,7 @@ export default async function MyAppsPage({ searchParams }: PageProps) {
 
   const params = await searchParams;
   const banner =
+    (params.delete && deleteMessages[params.delete]) ||
     (params.provision_schema && provisionMessages[params.provision_schema]) ||
     (params.upload && uploadMessages[params.upload]) ||
     undefined;

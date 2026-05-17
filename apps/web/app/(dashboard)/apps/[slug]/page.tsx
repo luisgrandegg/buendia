@@ -1,13 +1,22 @@
 import { notFound, redirect } from "next/navigation";
 import { inviteCollaboratorAction, removeCollaboratorAction } from "@/app/actions/shares";
-import { provisionSchemaAction } from "@/app/actions/apps";
+import { deleteAppAction, provisionSchemaAction, renameAppAction } from "@/app/actions/apps";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 interface PageProps {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ share?: string; provision_schema?: string }>;
+  searchParams: Promise<{ share?: string; provision_schema?: string; rename?: string }>;
 }
+
+const renameMessages: Record<string, { tone: "ok" | "warn"; text: string }> = {
+  ok: { tone: "ok", text: "App renamed." },
+  unauthenticated: { tone: "warn", text: "Sign in and try again." },
+  not_found: { tone: "warn", text: "Couldn't find that app." },
+  not_owner: { tone: "warn", text: "Only the owner can rename this app." },
+  empty: { tone: "warn", text: "Enter a name." },
+  write_failed: { tone: "warn", text: "Couldn't save the new name." },
+};
 
 const shareMessages: Record<string, { tone: "ok" | "warn"; text: string }> = {
   ok_invited: { tone: "ok", text: "Invitation added." },
@@ -62,7 +71,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 
 export default async function AppDetailPage({ params, searchParams }: PageProps) {
   const { slug } = await params;
-  const { share, provision_schema: provisionSchema } = await searchParams;
+  const { share, provision_schema: provisionSchema, rename } = await searchParams;
 
   const supabase = await createClient();
   const {
@@ -72,7 +81,9 @@ export default async function AppDetailPage({ params, searchParams }: PageProps)
 
   const { data: app } = await supabase
     .from("apps")
-    .select("id, slug, name, owner_id, current_version, created_at, schema_provisioned_at")
+    .select(
+      "id, slug, name, owner_id, current_version, created_at, schema_provisioned_at, schema_name",
+    )
     .eq("slug", slug)
     .maybeSingle();
   if (!app) {
@@ -104,6 +115,7 @@ export default async function AppDetailPage({ params, searchParams }: PageProps)
   }
 
   const banner =
+    (rename && renameMessages[rename]) ||
     (provisionSchema && provisionMessages[provisionSchema]) ||
     (share && shareMessages[share]) ||
     undefined;
@@ -212,6 +224,59 @@ export default async function AppDetailPage({ params, searchParams }: PageProps)
             Invitees must already have a Buendia account. Email-driven invitations for new users
             land with ticket 31.
           </p>
+        </section>
+      ) : null}
+
+      {isOwner ? (
+        <section style={{ marginTop: "2rem" }}>
+          <h2 style={{ fontSize: "1rem", marginBottom: "0.75rem" }}>Settings</h2>
+
+          <form
+            action={renameAppAction}
+            style={{ display: "flex", gap: "0.5rem", marginBottom: "1.5rem", alignItems: "center" }}
+          >
+            <input type="hidden" name="slug" value={app.slug} />
+            <input
+              name="name"
+              type="text"
+              defaultValue={app.name}
+              required
+              style={{ ...inputStyle, flex: 1 }}
+            />
+            <button type="submit" style={secondaryButtonStyle}>
+              Rename
+            </button>
+          </form>
+
+          <details
+            style={{
+              padding: "0.875rem 1rem",
+              border: "1px solid #fecaca",
+              borderRadius: "0.375rem",
+              background: "#fef2f2",
+            }}
+          >
+            <summary
+              style={{
+                cursor: "pointer",
+                fontSize: "0.875rem",
+                color: "#991b1b",
+                fontWeight: 500,
+              }}
+            >
+              Delete this app
+            </summary>
+            <p style={{ marginTop: "0.5rem", fontSize: "0.875rem", color: "#7f1d1d" }}>
+              Drops the <code>{app.schema_name}</code> schema in your Supabase project, removes the
+              stored HTML, deletes the app record + all shares + version history. Can't be undone.
+            </p>
+            <form action={deleteAppAction} style={{ marginTop: "0.75rem" }}>
+              <input type="hidden" name="slug" value={app.slug} />
+              <button type="submit" style={dangerButtonStyle}>
+                Delete app permanently
+              </button>
+            </form>
+          </details>
         </section>
       ) : null}
     </div>

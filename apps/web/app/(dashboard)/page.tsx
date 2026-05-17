@@ -17,7 +17,8 @@ interface PageProps {
 const uploadMessages: Record<string, { tone: "ok" | "warn"; text: (slug?: string) => string }> = {
   ok: {
     tone: "ok",
-    text: (slug) => `Uploaded${slug ? ` (slug: ${slug})` : ""}. Serving lands in ticket 22.`,
+    text: (slug) =>
+      slug ? `Uploaded. Open it from /a/${slug}, or click Open below.` : "Uploaded.",
   },
   missing_file: { tone: "warn", text: () => "Pick an HTML file before submitting." },
   not_html: { tone: "warn", text: () => "Only single .html files are accepted." },
@@ -176,16 +177,18 @@ function AppList({ apps }: { apps: AppRow[] }) {
                 {app.schema_provisioned_at ? "Re-provision" : "Provision schema"}
               </button>
             </form>
-            <span
+            <a
+              href={`/a/${app.slug}`}
+              target="_blank"
+              rel="noreferrer"
               style={{
-                fontSize: "0.8125rem",
-                color: "#6b7280",
-                fontStyle: "italic",
+                ...secondaryButtonStyle,
+                textDecoration: "none",
+                display: "inline-block",
               }}
-              title="The /a/<slug> serve route lands in ticket 22."
             >
-              Open arrives in ticket 22
-            </span>
+              Open ↗
+            </a>
           </div>
         </li>
       ))}

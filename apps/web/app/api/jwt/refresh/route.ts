@@ -1,18 +1,24 @@
 import { NextResponse } from "next/server";
 import { decrypt, loadMasterKey } from "@buendia/db";
 import { mintAppJwt, type AppRole } from "@/lib/jwt-mint";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 /**
  * Mint a short-lived JWT scoped to a single app, signed with the *owner's*
  * Supabase project JWT secret. Every app request flows through this.
  *
+ * - 400 if no `app` query param.
  * - 401 if no Buendia session.
  * - 403 if the requester isn't a member of the requested app.
  * - 502 if the owner's backend isn't fully provisioned yet.
  * - 200 with `{ jwt, exp }` on success.
  *
  * The TTL is hard-capped at 15 minutes in `lib/jwt-mint.ts`. No knob.
+ *
+ * Membership is checked via the requester's session (RLS-bound). The
+ * owner_backends read uses the admin client because collaborators can't
+ * see the owner's row through publishable-key RLS — see ADR 0007.
  */
 export async function POST(request: Request) {
   const appId = new URL(request.url).searchParams.get("app");
@@ -28,11 +34,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
   }
 
-  // RLS on `app_members` (via the underlying apps + app_shares policies)
-  // means a non-member sees nothing here.
   const { data: membership, error: membershipError } = await supabase
     .from("app_members")
-    .select("app_id, user_id, role, team_id, schema_name")
+    .select("app_id, owner_id, role, team_id, schema_name")
     .eq("app_id", appId)
     .eq("user_id", user.id)
     .maybeSingle();
@@ -41,28 +45,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
-  // Look up the owner's backend credentials. We read the owner row via a
-  // separate fetch using owner_id from apps, because the requester may be
-  // a collaborator (not the owner) and RLS on owner_backends denies them.
-  const { data: ownership } = await supabase
-    .from("apps")
-    .select("owner_id")
-    .eq("id", appId)
-    .maybeSingle();
-  if (!ownership) {
-    return NextResponse.json({ error: "forbidden" }, { status: 403 });
-  }
-
-  // For MVP this fetch goes through a server-side Supabase client which
-  // operates as the requester. If they're not the owner, RLS on
-  // owner_backends won't return the row. Reading via the management API
-  // or service role to bypass this lands in a follow-up; for now, the
-  // owner can mint for themselves and collaborators get the path once
-  // the edge route (ticket 22) consolidates the look-up server-side.
-  const { data: backend } = await supabase
+  const admin = createAdminClient();
+  const { data: backend } = await admin
     .from("owner_backends")
     .select("supabase_jwt_secret_encrypted")
-    .eq("user_id", ownership.owner_id)
+    .eq("user_id", membership.owner_id)
     .maybeSingle();
   if (!backend?.supabase_jwt_secret_encrypted) {
     return NextResponse.json({ error: "backend_not_ready" }, { status: 502 });

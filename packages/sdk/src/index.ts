@@ -21,11 +21,32 @@ export interface BuendiaApp {
   slug: string;
 }
 
+export type RealtimeChangeType = "INSERT" | "UPDATE" | "DELETE";
+
+export interface RealtimeChange<Row = Record<string, unknown>> {
+  type: RealtimeChangeType;
+  table: string;
+  schema: string;
+  new: Row | null;
+  old: Row | null;
+}
+
+export type Unsubscribe = () => void;
+
 export interface BuendiaClient {
   mode: BuendiaMode;
   db: SupabaseClient;
   user: BuendiaUser;
   app: BuendiaApp;
+  /**
+   * Subscribe to INSERT / UPDATE / DELETE changes on a table in the
+   * app's schema. Returns an `Unsubscribe` function — call it on
+   * teardown.
+   */
+  subscribe: <Row = Record<string, unknown>>(
+    table: string,
+    callback: (change: RealtimeChange<Row>) => void,
+  ) => Unsubscribe;
   /** Raw injected config. Stable but treat as read-only. */
   raw: BuendiaAppConfig;
 }
@@ -97,6 +118,8 @@ function buildHostedClient(config: BuendiaAppConfig): BuendiaClient {
     onRevoked: () => mountRevocationOverlay(),
   });
 
+  const subscribe = makeSubscribe(db, config.app.schema);
+
   return {
     mode: "hosted",
     db,
@@ -110,7 +133,40 @@ function buildHostedClient(config: BuendiaAppConfig): BuendiaClient {
       name: config.app.name,
       slug: config.app.slug,
     },
+    subscribe,
     raw: config,
+  };
+}
+
+function makeSubscribe(db: SupabaseClient, schema: string): BuendiaClient["subscribe"] {
+  return <Row = Record<string, unknown>>(
+    table: string,
+    callback: (change: RealtimeChange<Row>) => void,
+  ): Unsubscribe => {
+    // Channel name includes schema + table so multiple subscriptions on
+    // the same client don't collide.
+    const channel = db
+      .channel(`buendia:${schema}:${table}`)
+      .on(
+        // The supabase-js types want a literal; cast to keep the call
+        // site readable and free of generated-type churn.
+        "postgres_changes" as never,
+        { event: "*", schema, table },
+        (payload: { eventType: RealtimeChangeType; new: Row | null; old: Row | null }) => {
+          callback({
+            type: payload.eventType,
+            table,
+            schema,
+            new: payload.new,
+            old: payload.old,
+          });
+        },
+      )
+      .subscribe();
+
+    return () => {
+      void db.removeChannel(channel);
+    };
   };
 }
 

@@ -30,6 +30,9 @@ export interface BuendiaClient {
   raw: BuendiaAppConfig;
 }
 
+const REFRESH_INTERVAL_MS = 10 * 60 * 1000;
+const REFRESH_RETRY_DELAY_MS = 30 * 1000;
+
 /**
  * Bootstrapping entry point. App authors do:
  *
@@ -61,10 +64,9 @@ export async function init(): Promise<BuendiaClient> {
 }
 
 function buildHostedClient(config: BuendiaAppConfig): BuendiaClient {
-  // The JWT we ship in __APP_CONFIG__ is short-lived. Ticket 26 wires up
-  // a refresh timer that POSTs to config.refreshUrl every ~10 minutes
-  // and replaces this value via the closure variable, so the Supabase
-  // client picks up the latest token without recreating itself.
+  // The Supabase client reads this via the accessToken callback on every
+  // request, so updating it from a refresh keeps the client current
+  // without recreating it.
   let currentJwt = config.jwt;
 
   const headers: Record<string, string> = {
@@ -83,10 +85,16 @@ function buildHostedClient(config: BuendiaAppConfig): BuendiaClient {
     },
   });
 
-  // Hand-back hook for ticket 26 to plug into without recreating the
-  // client. Not part of the public surface yet.
-  void ((newJwt: string) => {
-    currentJwt = newJwt;
+  // Background JWT refresh + revocation overlay. Never throws; failures
+  // either retry quietly (transient) or terminate with the overlay
+  // (revoked).
+  scheduleJwtRefresh({
+    initialExpEpoch: config.jwtExp,
+    refreshUrl: config.refreshUrl,
+    onNewJwt: (jwt) => {
+      currentJwt = jwt;
+    },
+    onRevoked: () => mountRevocationOverlay(),
   });
 
   return {
@@ -104,6 +112,163 @@ function buildHostedClient(config: BuendiaAppConfig): BuendiaClient {
     },
     raw: config,
   };
+}
+
+interface ScheduleParams {
+  initialExpEpoch: number;
+  refreshUrl: string;
+  onNewJwt: (jwt: string) => void;
+  onRevoked: () => void;
+}
+
+/**
+ * Refresh the JWT every {@link REFRESH_INTERVAL_MS}, and once around 30
+ * seconds before the initial token's `exp` (whichever comes first). A
+ * 401/403 ends the loop and triggers the revocation overlay; transient
+ * failures (network, 5xx) back off and retry.
+ */
+function scheduleJwtRefresh({
+  initialExpEpoch,
+  refreshUrl,
+  onNewJwt,
+  onRevoked,
+}: ScheduleParams): void {
+  let stopped = false;
+
+  const initialDelay = pickInitialDelay(initialExpEpoch);
+
+  const tick = async (): Promise<void> => {
+    if (stopped) return;
+
+    let res: Response;
+    try {
+      res = await fetch(refreshUrl, {
+        method: "POST",
+        credentials: "include",
+      });
+    } catch {
+      // Network blip — retry shortly. Don't terminate the loop on these.
+      window.setTimeout(tick, REFRESH_RETRY_DELAY_MS);
+      return;
+    }
+
+    if (res.status === 401 || res.status === 403) {
+      stopped = true;
+      onRevoked();
+      return;
+    }
+
+    if (!res.ok) {
+      // 5xx or other transient — back off and retry.
+      window.setTimeout(tick, REFRESH_RETRY_DELAY_MS);
+      return;
+    }
+
+    let payload: { jwt?: string; exp?: number } | null = null;
+    try {
+      payload = (await res.json()) as { jwt?: string; exp?: number };
+    } catch {
+      window.setTimeout(tick, REFRESH_RETRY_DELAY_MS);
+      return;
+    }
+
+    if (!payload?.jwt) {
+      window.setTimeout(tick, REFRESH_RETRY_DELAY_MS);
+      return;
+    }
+
+    onNewJwt(payload.jwt);
+    window.setTimeout(tick, REFRESH_INTERVAL_MS);
+  };
+
+  window.setTimeout(tick, initialDelay);
+}
+
+function pickInitialDelay(expEpoch: number): number {
+  const nowMs = Date.now();
+  const expMs = expEpoch * 1000;
+  // Refresh ~30 s before expiry or on REFRESH_INTERVAL_MS, whichever
+  // comes first. Floor at 5 s so we never fire instantly on a stale
+  // token (the user might still be reading the page).
+  const beforeExp = expMs - nowMs - 30_000;
+  const interval = REFRESH_INTERVAL_MS;
+  const chosen = Math.min(beforeExp, interval);
+  return Math.max(chosen, 5_000);
+}
+
+/**
+ * Mount a non-dismissable overlay covering the page when the JWT
+ * refresh fails with 401/403. The app's UI stays mounted underneath —
+ * we just make it unreachable so the user gets a clear, single message
+ * instead of a stream of silent permission errors.
+ */
+function mountRevocationOverlay(): void {
+  if (typeof document === "undefined") return;
+  if (document.getElementById("buendia-revoked-overlay")) return;
+
+  const overlay = document.createElement("div");
+  overlay.id = "buendia-revoked-overlay";
+  overlay.setAttribute("role", "alertdialog");
+  overlay.setAttribute("aria-modal", "true");
+  overlay.setAttribute("aria-labelledby", "buendia-revoked-title");
+
+  Object.assign(overlay.style, {
+    position: "fixed",
+    inset: "0",
+    background: "rgba(17, 24, 39, 0.75)",
+    backdropFilter: "blur(4px)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: "2147483647",
+    fontFamily: "system-ui, -apple-system, sans-serif",
+    color: "#111827",
+    padding: "1.5rem",
+  });
+
+  const card = document.createElement("div");
+  Object.assign(card.style, {
+    background: "white",
+    borderRadius: "0.5rem",
+    padding: "1.5rem 1.75rem",
+    maxWidth: "26rem",
+    width: "100%",
+    boxShadow: "0 20px 50px -10px rgba(0,0,0,0.4)",
+  });
+
+  const title = document.createElement("h1");
+  title.id = "buendia-revoked-title";
+  title.textContent = "Your access to this app was removed.";
+  Object.assign(title.style, { fontSize: "1.125rem", margin: "0 0 0.5rem 0" });
+
+  const body = document.createElement("p");
+  body.textContent =
+    "The owner revoked your access, or your session ended. If you think this is a mistake, ask them to re-invite you.";
+  Object.assign(body.style, {
+    color: "#4b5563",
+    margin: "0 0 1.25rem 0",
+    fontSize: "0.9375rem",
+    lineHeight: "1.5",
+  });
+
+  const back = document.createElement("a");
+  back.textContent = "Back to Buendia";
+  back.href = "/";
+  Object.assign(back.style, {
+    display: "inline-block",
+    padding: "0.5rem 1rem",
+    borderRadius: "0.375rem",
+    background: "#111827",
+    color: "white",
+    textDecoration: "none",
+    fontSize: "0.9375rem",
+  });
+
+  card.appendChild(title);
+  card.appendChild(body);
+  card.appendChild(back);
+  overlay.appendChild(card);
+  document.body.appendChild(overlay);
 }
 
 // Re-export the shared type so SDK consumers don't need a separate import

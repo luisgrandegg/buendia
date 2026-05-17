@@ -14,6 +14,15 @@ export const env = {
     return required("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY");
   },
   /**
+   * Control-plane secret key (Supabase service-role replacement). Server
+   * only — never imported by code that runs in the browser. Used by the
+   * admin client in `lib/supabase/admin.ts` to read owner_backends + the
+   * app-html bucket from collaborator routes.
+   */
+  get supabaseSecretKey() {
+    return required("SUPABASE_SECRET_KEY");
+  },
+  /**
    * Master KEK for envelope-encrypting owner-backend credentials. Decoded by
    * `loadMasterKey()` in `@buendia/db`.
    */

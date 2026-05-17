@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "predev": "pnpm --filter @buendia/sdk build && node ./scripts/sync-sdk.mjs",
     "dev": "next dev",
+    "prebuild": "node ./scripts/sync-sdk.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",

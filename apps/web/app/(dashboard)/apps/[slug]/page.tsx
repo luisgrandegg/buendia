@@ -149,17 +149,25 @@ export default async function AppDetailPage({ params, searchParams }: PageProps)
 
       <section style={{ marginBottom: "2rem" }}>
         <h2 style={{ fontSize: "1rem", marginBottom: "0.75rem" }}>App</h2>
-        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
           <a href={`/a/${app.slug}`} target="_blank" rel="noreferrer" style={primaryButtonStyle}>
             Open ↗
           </a>
           {isOwner ? (
-            <form action={provisionSchemaAction}>
-              <input type="hidden" name="app_id" value={app.id} />
-              <button type="submit" style={secondaryButtonStyle}>
-                {app.schema_provisioned_at ? "Re-provision schema" : "Provision schema"}
-              </button>
-            </form>
+            <>
+              <form action={provisionSchemaAction}>
+                <input type="hidden" name="app_id" value={app.id} />
+                <button type="submit" style={secondaryButtonStyle}>
+                  {app.schema_provisioned_at ? "Re-provision schema" : "Provision schema"}
+                </button>
+              </form>
+              <a
+                href={`/apps/${app.slug}/export`}
+                style={{ ...secondaryButtonStyle, textDecoration: "none", display: "inline-block" }}
+              >
+                Export bundle
+              </a>
+            </>
           ) : null}
         </div>
         <p style={{ color: "#6b7280", margin: "0.5rem 0 0 0", fontSize: "0.8125rem" }}>

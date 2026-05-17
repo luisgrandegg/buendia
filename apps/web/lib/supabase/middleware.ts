@@ -4,7 +4,7 @@ import { env } from "@/lib/env";
 
 type CookieSet = { name: string; value: string; options: CookieOptions };
 
-const PUBLIC_PATHS = ["/signin", "/signup", "/auth"];
+const PUBLIC_PATHS = ["/signin", "/signup", "/auth", "/docs"];
 
 function isPublicPath(pathname: string): boolean {
   return PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));

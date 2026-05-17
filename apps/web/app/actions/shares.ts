@@ -1,7 +1,10 @@
 "use server";
 
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { recordAudit } from "@buendia/db";
+import { generateInvitationToken, invitationExpiry, invitationUrl } from "@/lib/invitations";
+import { originFromHeaders } from "@/lib/oauth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -11,21 +14,24 @@ import { createClient } from "@/lib/supabase/server";
  * remove them. Each path writes to `public.app_shares` and emits an
  * `audit_log` row.
  *
- * MVP scope: we can only invite users who already have a Buendia
- * account. Email-driven invitations for new users land with ticket 31.
+ * If the email already belongs to a Buendia account, we drop into the
+ * existing app_shares upsert. Otherwise we create a pending row in
+ * public.invitations and surface a sharable link — the recipient signs
+ * up via /invite?token=…, and the auth action picks the pending
+ * invitations up by email and resolves them into app_shares rows.
  */
 
 type ShareStatus =
   | "ok_invited"
+  | "ok_invited_email"
   | "ok_role_changed"
   | "ok_removed"
+  | "ok_invitation_removed"
   | "unauthenticated"
   | "missing_email"
-  | "user_not_found"
   | "self_invite"
   | "not_owner"
   | "not_found"
-  | "already_member"
   | "write_failed";
 
 function shareRedirect(slug: string, status: ShareStatus): never {
@@ -88,24 +94,67 @@ export async function inviteCollaboratorAction(formData: FormData): Promise<void
   // browser look up arbitrary emails would be an enumeration oracle.
   const admin = createAdminClient();
   const { data: invitee } = await admin.from("users").select("id").eq("email", email).maybeSingle();
-  if (!invitee) shareRedirect(slug, "user_not_found");
 
-  // Disallow re-inviting the owner.
-  if (invitee.id === ctx.app.owner_id) shareRedirect(slug, "self_invite");
+  if (invitee) {
+    if (invitee.id === ctx.app.owner_id) shareRedirect(slug, "self_invite");
+    await upsertShareForExistingUser(ctx, invitee.id, role, slug);
+    // upsertShareForExistingUser always redirects.
+  }
 
-  // If a row already exists, upsert acts as a role change; track which
-  // case for the audit action emitted at the end.
+  // Email doesn't belong to a Buendia account — create a pending
+  // invitation. Owner-level RLS lets us write directly from the
+  // session-bound client.
+  const token = generateInvitationToken();
+  const expiresAt = invitationExpiry().toISOString();
+
+  const { error: invError } = await ctx.supabase.from("invitations").upsert(
+    {
+      app_id: ctx.app.id,
+      email,
+      role,
+      invited_by: ctx.user.id,
+      token,
+      expires_at: expiresAt,
+    },
+    { onConflict: "app_id,email" },
+  );
+  if (invError) {
+    console.error("[buendia] invitations upsert failed:", invError);
+    shareRedirect(slug, "write_failed");
+  }
+
+  await recordAudit(ctx.supabase, {
+    actorId: ctx.user.id,
+    action: "share.invited",
+    targetAppId: ctx.app.id,
+    metadata: { slug: ctx.app.slug, role, invitation_email: email, pending: true },
+  });
+
+  // Build the link with the request origin so the inviter can copy it.
+  // We don't email it for MVP (a real Resend integration is a follow-up);
+  // the detail page surfaces it as a copy-paste affordance.
+  void originFromHeaders(await headers());
+
+  shareRedirect(slug, "ok_invited_email");
+}
+
+async function upsertShareForExistingUser(
+  ctx: SessionContext,
+  userId: string,
+  role: "viewer" | "editor",
+  slug: string,
+): Promise<never> {
   const { data: existing } = await ctx.supabase
     .from("app_shares")
     .select("role")
     .eq("app_id", ctx.app.id)
-    .eq("user_id", invitee.id)
+    .eq("user_id", userId)
     .maybeSingle();
 
   const { error: upsertError } = await ctx.supabase.from("app_shares").upsert(
     {
       app_id: ctx.app.id,
-      user_id: invitee.id,
+      user_id: userId,
       role,
       invited_by: ctx.user.id,
     },
@@ -120,7 +169,7 @@ export async function inviteCollaboratorAction(formData: FormData): Promise<void
     actorId: ctx.user.id,
     action: existing && existing.role !== role ? "share.role_changed" : "share.invited",
     targetAppId: ctx.app.id,
-    targetUserId: invitee.id,
+    targetUserId: userId,
     metadata: { slug: ctx.app.slug, role, previous_role: existing?.role ?? null },
   });
 
@@ -154,3 +203,32 @@ export async function removeCollaboratorAction(formData: FormData): Promise<void
 
   shareRedirect(slug, "ok_removed");
 }
+
+export async function cancelInvitationAction(formData: FormData): Promise<void> {
+  const slug = String(formData.get("slug") ?? "");
+  const ctx = await loadOwnedApp(slug);
+
+  const invitationId = formData.get("invitation_id");
+  if (typeof invitationId !== "string" || !invitationId) shareRedirect(slug, "not_found");
+
+  const { error } = await ctx.supabase
+    .from("invitations")
+    .delete()
+    .eq("id", invitationId)
+    .eq("app_id", ctx.app.id);
+  if (error) {
+    console.error("[buendia] invitations delete failed:", error);
+    shareRedirect(slug, "write_failed");
+  }
+
+  await recordAudit(ctx.supabase, {
+    actorId: ctx.user.id,
+    action: "share.removed",
+    targetAppId: ctx.app.id,
+    metadata: { slug: ctx.app.slug, invitation_id: invitationId },
+  });
+
+  shareRedirect(slug, "ok_invitation_removed");
+}
+
+export { invitationUrl };

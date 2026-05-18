@@ -11,6 +11,7 @@ Stop driving cookie `Secure` flags off `NODE_ENV` per call-site. One helper, one
 ## Background
 
 Today:
+
 - `apps/web/app/actions/personal-access-tokens.ts:76` sets `secure: process.env.NODE_ENV === "production"`.
 - `apps/web/app/api/auth/supabase/start/route.ts:45` uses an inverted-localhost check.
 

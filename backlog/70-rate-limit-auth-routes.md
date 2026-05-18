@@ -24,7 +24,7 @@ Add a small rate-limit helper and apply it to every auth-adjacent route. Separat
 - In `app/api/jwt/refresh/route.ts`:
   - Add an in-process LRU keyed by `owner_id` holding `{ jwtSecret, expiresAt }` with a 60s TTL. Decrypt only on miss.
   - Unit test: two refreshes within the TTL trigger one decrypt.
-- Failure mode: rate-limit helper failures (KV down) fail *open* with a logged warning. Don't lock users out on infra hiccups.
+- Failure mode: rate-limit helper failures (KV down) fail _open_ with a logged warning. Don't lock users out on infra hiccups.
 
 ## Out of scope
 

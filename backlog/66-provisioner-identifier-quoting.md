@@ -2,12 +2,12 @@
 
 **Phase:** 6
 **Severity:** High (defence in depth)
-**Audit ref:** SECURITY_AUDIT.md §H1
-**Constitution refs:** Architecture Invariants ("The SDK has zero privileged operations" — the provisioner is the *one* privileged path; it must be airtight).
+**Audit ref:** SECURITY*AUDIT.md §H1
+**Constitution refs:** Architecture Invariants ("The SDK has zero privileged operations" — the provisioner is the \_one* privileged path; it must be airtight).
 
 ## Goal
 
-Replace string interpolation of `schemaName` in `lib/schema-provisioner.ts` with proper PostgreSQL identifier quoting. The current `^app_[a-z0-9_]+$` regex makes the system safe *today*; the moment anyone relaxes it (unicode handles, `-`, longer prefixes) it becomes SQL injection against the owner's Supabase project, where Buendia runs with elevated grants.
+Replace string interpolation of `schemaName` in `lib/schema-provisioner.ts` with proper PostgreSQL identifier quoting. The current `^app_[a-z0-9_]+$` regex makes the system safe _today_; the moment anyone relaxes it (unicode handles, `-`, longer prefixes) it becomes SQL injection against the owner's Supabase project, where Buendia runs with elevated grants.
 
 ## Scope
 
@@ -31,7 +31,7 @@ Replace string interpolation of `schemaName` in `lib/schema-provisioner.ts` with
 
 ## Out of scope
 
-- Changing what the provisioner *does* (only how it interpolates).
+- Changing what the provisioner _does_ (only how it interpolates).
 - The `security definer` audit (set `search_path = ''`, document on the function).
 
 ## Acceptance criteria

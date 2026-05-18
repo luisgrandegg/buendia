@@ -19,12 +19,12 @@ The view is created with `create or replace view ... as ...` with no view option
 Impact: any holder of a Supabase publishable-key + JWT (i.e. any signed-up user) can run
 
 ```ts
-supabase.from("app_members").select("*")
+supabase.from("app_members").select("*");
 ```
 
 and obtain the slug, schema, owner, team and storage path of every app in the system. The application-layer `.eq("user_id", user.id)` in `apps/web/app/a/[slug]/route.ts:43` is voluntary — Supabase clients can omit it. Same problem affects `lib/operations/apps.ts:listAppsForUser`.
 
-This also breaks Principle 8 (open-protocol substitutes) and Hard Invariant *"Every table in an app schema gets RLS"* in spirit: the platform itself is leaking its registry.
+This also breaks Principle 8 (open-protocol substitutes) and Hard Invariant _"Every table in an app schema gets RLS"_ in spirit: the platform itself is leaking its registry.
 
 Fix: recreate the view with `security_invoker`, **and** widen `public.apps`'s SELECT policy so collaborators can read shared rows through the view:
 
@@ -182,7 +182,7 @@ Mass-invitation spam from a signed-up account, PAT-grinding, and signup brute-fo
 
 A leaked PAT learns whether the user has a connected backend and when. Minor info leak; consider gating backend metadata on session-authenticated callers only.
 
-### M4. Audit log has no UPDATE/DELETE policy *and* no CHECK on `action`
+### M4. Audit log has no UPDATE/DELETE policy _and_ no CHECK on `action`
 
 `packages/db/migrations/0003_audit_log.sql:26-34`
 
@@ -220,7 +220,7 @@ Acceptable for true standalone use (no Buendia involvement), but worth a note in
 
 `packages/sdk/src/index.ts:465-531`
 
-The revocation overlay is a DOM node appended to `document.body`. A malicious app (the C2 scenario) can `remove()` it. Because the SDK also stops querying when revoked (the `stopped` flag), the user is *protected from new requests* — but they may not realise their session is dead. Acceptable in the short term; the real fix is C2 (run the app in a sandboxed origin so the host can't manipulate dashboard-owned UI).
+The revocation overlay is a DOM node appended to `document.body`. A malicious app (the C2 scenario) can `remove()` it. Because the SDK also stops querying when revoked (the `stopped` flag), the user is _protected from new requests_ — but they may not realise their session is dead. Acceptable in the short term; the real fix is C2 (run the app in a sandboxed origin so the host can't manipulate dashboard-owned UI).
 
 ---
 

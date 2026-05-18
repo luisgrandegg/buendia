@@ -10,7 +10,7 @@ Tighten the control-plane audit log against (a) authenticated clients inserting 
 
 ## Background
 
-`packages/db/migrations/0003_audit_log.sql` enables RLS with only an `INSERT` policy. Read/update/delete are correctly denied (RLS + no policy = deny), but the migration doesn't *say so* — auditors and Supabase advisor both flag it. Separately, `action` is a free-text column, so an authenticated user can `insert into audit_log (action, actor_id) values ('admin.factory_reset', auth.uid())` and pollute the trail. Lastly, `validate-backends/route.ts:94` emits `backend.credentials_refreshed`, which isn't in `AUDIT_ACTIONS` in `packages/db/src/audit.ts` — TypeScript should have rejected it; either the union is loose or the type-check is being skipped.
+`packages/db/migrations/0003_audit_log.sql` enables RLS with only an `INSERT` policy. Read/update/delete are correctly denied (RLS + no policy = deny), but the migration doesn't _say so_ — auditors and Supabase advisor both flag it. Separately, `action` is a free-text column, so an authenticated user can `insert into audit_log (action, actor_id) values ('admin.factory_reset', auth.uid())` and pollute the trail. Lastly, `validate-backends/route.ts:94` emits `backend.credentials_refreshed`, which isn't in `AUDIT_ACTIONS` in `packages/db/src/audit.ts` — TypeScript should have rejected it; either the union is loose or the type-check is being skipped.
 
 ## Scope
 

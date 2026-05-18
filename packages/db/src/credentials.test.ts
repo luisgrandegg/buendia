@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { describe, expect, it } from "vitest";
 
-import { decrypt, encrypt, generateMasterKey, loadMasterKey } from "./credentials";
+import { byteaLiteral, decrypt, encrypt, generateMasterKey, loadMasterKey } from "./credentials";
 
 /**
  * Coverage for PR #10 / #12 (credential storage + envelope encryption).
@@ -101,6 +101,38 @@ describe("decrypt failure modes", () => {
     const flipAt = blob.length - 20;
     tampered[flipAt] = tampered[flipAt]! ^ 0xff;
     expect(() => decrypt(tampered, key)).toThrow();
+  });
+});
+
+/**
+ * Regression for the "unsupported credential blob version: 123" bug:
+ * supabase-js JSON-stringifies a raw Node Buffer as
+ * `{"type":"Buffer","data":[…]}` (first byte = `{` = 0x7b = 123), so the
+ * value lands in the `bytea` column as the bytes of that JSON. Encoding
+ * via `byteaLiteral` first sends `\x<hex>` to PostgREST, which reaches
+ * the database as a proper bytea literal.
+ */
+describe("byteaLiteral", () => {
+  it("formats a buffer as a PostgreSQL bytea literal", () => {
+    expect(byteaLiteral(Buffer.from([0x01, 0xab, 0xcd]))).toBe("\\x01abcd");
+  });
+
+  it("returns the bytea sentinel even for an empty buffer", () => {
+    expect(byteaLiteral(Buffer.alloc(0))).toBe("\\x");
+  });
+
+  it("round-trips through encrypt → byteaLiteral → bufferFromBytea → decrypt", () => {
+    const key = freshMasterKey();
+    const plaintext = "buendia_oauth_refresh_token_abcdefg";
+    const blob = encrypt(plaintext, key);
+    const literal = byteaLiteral(blob);
+    expect(literal.startsWith("\\x")).toBe(true);
+
+    // Simulate the read path used by callers: PostgREST returns the bytea
+    // column as `\x<hex>`; we recover the Buffer + decrypt.
+    const recovered = Buffer.from(literal.slice(2), "hex");
+    expect(recovered.equals(blob)).toBe(true);
+    expect(decrypt(recovered, key)).toBe(plaintext);
   });
 });
 

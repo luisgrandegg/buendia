@@ -1,4 +1,4 @@
-import { decrypt, encrypt, loadMasterKey } from "@buendia/db";
+import { byteaLiteral, decrypt, encrypt, loadMasterKey } from "@buendia/db";
 import { createClient } from "@/lib/supabase/server";
 
 /**
@@ -52,7 +52,7 @@ export async function persistOauthRefreshToken(
   refreshToken: string,
 ): Promise<{ error?: string }> {
   const masterKey = loadMasterKey();
-  const encrypted = encrypt(refreshToken, masterKey);
+  const encrypted = byteaLiteral(encrypt(refreshToken, masterKey));
 
   const supabase = await createClient();
   const { error } = await supabase.from("owner_backends").upsert(
@@ -114,13 +114,15 @@ export async function completeProvisioning(
   const row: Record<string, unknown> = {
     supabase_project_ref: fields.projectRef,
     supabase_url: fields.projectUrl,
-    supabase_publishable_key_encrypted: encrypt(fields.publishableKey, masterKey),
-    supabase_secret_key_encrypted: encrypt(fields.secretKey, masterKey),
-    supabase_jwt_secret_encrypted: encrypt(fields.jwtSecret, masterKey),
+    supabase_publishable_key_encrypted: byteaLiteral(encrypt(fields.publishableKey, masterKey)),
+    supabase_secret_key_encrypted: byteaLiteral(encrypt(fields.secretKey, masterKey)),
+    supabase_jwt_secret_encrypted: byteaLiteral(encrypt(fields.jwtSecret, masterKey)),
     last_validated_at: new Date().toISOString(),
   };
   if (fields.newRefreshToken) {
-    row.supabase_oauth_refresh_token_encrypted = encrypt(fields.newRefreshToken, masterKey);
+    row.supabase_oauth_refresh_token_encrypted = byteaLiteral(
+      encrypt(fields.newRefreshToken, masterKey),
+    );
   }
 
   const supabase = await createClient();

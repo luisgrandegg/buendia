@@ -16,6 +16,7 @@ import {
 } from "@/lib/management-api";
 import { refreshAccessToken } from "@/lib/oauth";
 import { completeProvisioning, getOwnerRefreshToken } from "@/lib/owner-backend";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 const PROJECT_NAME = "Buendia Apps";
@@ -161,7 +162,14 @@ export async function disconnectBuendiaAction(): Promise<void> {
   } = await supabase.auth.getUser();
   if (!user) redirect("/signin");
 
-  const { error } = await supabase.from("owner_backends").delete().eq("user_id", user.id);
+  // owner_backends doesn't currently expose a DELETE RLS policy — the
+  // session client would silently affect zero rows. Use the admin client
+  // with an explicit user_id filter (same pattern the rest of the
+  // operations layer settled on) so disconnecting actually clears the
+  // stored credentials. This also lets users recover from a malformed
+  // row written by an older build of the encoder.
+  const admin = createAdminClient();
+  const { error } = await admin.from("owner_backends").delete().eq("user_id", user.id);
   if (error) {
     console.error("[buendia] disconnect failed:", error);
     redirect("/settings?disconnect=write_failed");
@@ -204,7 +212,7 @@ function refreshCredsFinish(status: RefreshCredsStatus): never {
 export async function refreshCredentialsAction(): Promise<void> {
   const { getProjectApiKeys, getProjectJwtSecret, projectUrl } =
     await import("@/lib/management-api");
-  const { encrypt, loadMasterKey } = await import("@buendia/db");
+  const { byteaLiteral, encrypt, loadMasterKey } = await import("@buendia/db");
 
   const supabase = await createClient();
   const {
@@ -251,10 +259,10 @@ export async function refreshCredentialsAction(): Promise<void> {
     .from("owner_backends")
     .update({
       supabase_url: projectUrl(backend.supabase_project_ref),
-      supabase_publishable_key_encrypted: encrypt(apiKeys.publishableKey, masterKey),
-      supabase_secret_key_encrypted: encrypt(apiKeys.secretKey, masterKey),
-      supabase_jwt_secret_encrypted: encrypt(jwtSecret, masterKey),
-      supabase_oauth_refresh_token_encrypted: encrypt(access.refreshToken, masterKey),
+      supabase_publishable_key_encrypted: byteaLiteral(encrypt(apiKeys.publishableKey, masterKey)),
+      supabase_secret_key_encrypted: byteaLiteral(encrypt(apiKeys.secretKey, masterKey)),
+      supabase_jwt_secret_encrypted: byteaLiteral(encrypt(jwtSecret, masterKey)),
+      supabase_oauth_refresh_token_encrypted: byteaLiteral(encrypt(access.refreshToken, masterKey)),
       grant_status: "ok",
       last_validated_at: new Date().toISOString(),
     })

@@ -1,7 +1,13 @@
 import { createHmac } from "node:crypto";
 import { describe, expect, it } from "vitest";
 
-import { JWT_TTL_SECONDS, mintAppJwt } from "./jwt-mint";
+import {
+  JWT_TTL_SECONDS,
+  REFRESH_GRACE_SECONDS,
+  mintAppJwt,
+  unsafeDecodeClaims,
+  verifyAppJwt,
+} from "./jwt-mint";
 
 /**
  * Coverage for PR #14 (JWT mint endpoint). The minter signs HS256 tokens
@@ -101,5 +107,113 @@ describe("mintAppJwt", () => {
     const team2 = mintAppJwt({ ...BASE_PARAMS, teamId: "team-2", now: 1 }).jwt;
     expect(owner).not.toBe(editor);
     expect(team2).not.toBe(editor);
+  });
+});
+
+describe("verifyAppJwt", () => {
+  const now = 1_700_000_000;
+  function fresh(overrides: Partial<typeof BASE_PARAMS> = {}) {
+    return mintAppJwt({ ...BASE_PARAMS, ...overrides, now }).jwt;
+  }
+
+  it("accepts a freshly-minted JWT signed with the same secret", () => {
+    const res = verifyAppJwt({ jwt: fresh(), jwtSecret: BASE_PARAMS.jwtSecret, now });
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.claims.sub).toBe(BASE_PARAMS.userId);
+      expect(res.claims.app_id).toBe(BASE_PARAMS.appId);
+    }
+  });
+
+  it("rejects a JWT signed with a different secret (constant-time compare)", () => {
+    const res = verifyAppJwt({ jwt: fresh(), jwtSecret: "different-secret", now });
+    expect(res).toEqual({ ok: false, reason: "bad_signature" });
+  });
+
+  it("rejects tampered claims (signature no longer matches)", () => {
+    const jwt = fresh();
+    const [h, , s] = jwt.split(".");
+    const tamperedPayload = Buffer.from(JSON.stringify({ ...BASE_PARAMS, sub: "attacker" }))
+      .toString("base64")
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/, "");
+    const tampered = `${h}.${tamperedPayload}.${s}`;
+    expect(verifyAppJwt({ jwt: tampered, jwtSecret: BASE_PARAMS.jwtSecret, now })).toEqual({
+      ok: false,
+      reason: "bad_signature",
+    });
+  });
+
+  it("rejects an alg=none downgrade", () => {
+    const header = Buffer.from(JSON.stringify({ alg: "none", typ: "JWT" }))
+      .toString("base64")
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/, "");
+    const payload = Buffer.from(
+      JSON.stringify({
+        sub: "u",
+        role: "authenticated",
+        aud: "authenticated",
+        iss: "buendia",
+        app_id: "a",
+        app_schema: "s",
+        team_id: "t",
+        buendia_role: "owner",
+        iat: now,
+        exp: now + 60,
+      }),
+    )
+      .toString("base64")
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/, "");
+    const noSig = `${header}.${payload}.`;
+    expect(verifyAppJwt({ jwt: noSig, jwtSecret: BASE_PARAMS.jwtSecret, now })).toEqual({
+      ok: false,
+      reason: "wrong_alg",
+    });
+  });
+
+  it("rejects expired JWTs past the grace window", () => {
+    const jwt = fresh();
+    const past = now + JWT_TTL_SECONDS + REFRESH_GRACE_SECONDS + 1;
+    expect(verifyAppJwt({ jwt, jwtSecret: BASE_PARAMS.jwtSecret, now: past })).toEqual({
+      ok: false,
+      reason: "expired",
+    });
+  });
+
+  it("accepts JWTs just past exp within the grace window", () => {
+    const jwt = fresh();
+    const justAfter = now + JWT_TTL_SECONDS + 10;
+    const res = verifyAppJwt({ jwt, jwtSecret: BASE_PARAMS.jwtSecret, now: justAfter });
+    expect(res.ok).toBe(true);
+  });
+
+  it("rejects malformed JWTs", () => {
+    expect(verifyAppJwt({ jwt: "not.a.jwt", jwtSecret: "s" })).toEqual({
+      ok: false,
+      reason: "malformed",
+    });
+    expect(verifyAppJwt({ jwt: "one.two", jwtSecret: "s" })).toEqual({
+      ok: false,
+      reason: "malformed",
+    });
+  });
+});
+
+describe("unsafeDecodeClaims", () => {
+  it("returns claims without verifying the signature", () => {
+    const jwt = mintAppJwt({ ...BASE_PARAMS, now: 1 }).jwt;
+    const claims = unsafeDecodeClaims(jwt);
+    expect(claims?.app_id).toBe("app-1");
+    expect(claims?.sub).toBe("user-1");
+  });
+
+  it("returns null on malformed input", () => {
+    expect(unsafeDecodeClaims("garbage")).toBeNull();
+    expect(unsafeDecodeClaims("a.b")).toBeNull();
   });
 });

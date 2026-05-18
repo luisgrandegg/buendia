@@ -227,7 +227,11 @@ describe("background JWT refresh (PR #18)", () => {
       "/refresh",
       expect.objectContaining({
         method: "POST",
-        credentials: "include",
+        credentials: "omit",
+        redirect: "error",
+        headers: expect.objectContaining({
+          Authorization: expect.stringMatching(/^Bearer /),
+        }),
       }),
     );
     expect(await options.accessToken()).toBe("rotated.jwt");

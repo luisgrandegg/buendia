@@ -109,6 +109,7 @@ function buildHostedClient(config: BuendiaAppConfig): BuendiaClient {
   scheduleJwtRefresh({
     initialExpEpoch: config.jwtExp,
     refreshUrl: config.refreshUrl,
+    getJwt: () => currentJwt,
     onNewJwt: (jwt) => {
       currentJwt = jwt;
     },
@@ -377,6 +378,14 @@ function buildStandaloneClient(config: StandaloneConfig): BuendiaClient {
 interface ScheduleParams {
   initialExpEpoch: number;
   refreshUrl: string;
+  /**
+   * Returns the JWT the next refresh call should authenticate with.
+   * Read fresh on every tick so the caller's update in `onNewJwt`
+   * propagates without us holding a stale value. See
+   * SECURITY_AUDIT.md §H4 — refresh no longer leans on first-party
+   * session cookies.
+   */
+  getJwt: () => string;
   onNewJwt: (jwt: string) => void;
   onRevoked: () => void;
 }
@@ -390,6 +399,7 @@ interface ScheduleParams {
 function scheduleJwtRefresh({
   initialExpEpoch,
   refreshUrl,
+  getJwt,
   onNewJwt,
   onRevoked,
 }: ScheduleParams): void {
@@ -402,9 +412,14 @@ function scheduleJwtRefresh({
 
     let res: Response;
     try {
+      // Bearer auth, no cookies. See SECURITY_AUDIT.md §H4 — the SDK
+      // no longer relies on dashboard session cookies, so this works
+      // identically from a future cookieless sandbox origin (ticket 75).
       res = await fetch(refreshUrl, {
         method: "POST",
-        credentials: "include",
+        credentials: "omit",
+        redirect: "error",
+        headers: { Authorization: `Bearer ${getJwt()}` },
       });
     } catch {
       // Network blip — retry shortly. Don't terminate the loop on these.

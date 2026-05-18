@@ -30,6 +30,15 @@ describe("loadMasterKey", () => {
     const short = randomBytes(16).toString("base64");
     expect(() => loadMasterKey({ BUENDIA_MASTER_KEY: short })).toThrow(/32 bytes/);
   });
+
+  it("rejects non-base64 input with a clear message (audit §L1)", () => {
+    // Stray spaces are the canonical typo; `Buffer.from(_, 'base64')`
+    // silently drops them, but the resulting key is wrong-length.
+    // Reject up front so the error points at the cause.
+    expect(() => loadMasterKey({ BUENDIA_MASTER_KEY: "not valid base64!@#" })).toThrow(
+      /base64-encoded/,
+    );
+  });
 });
 
 describe("encrypt / decrypt round-trip", () => {

@@ -2,6 +2,7 @@
 
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { assertSameOrigin } from "@/lib/assert-origin";
 import { invitationUrl } from "@/lib/invitations";
 import { originFromHeaders } from "@/lib/oauth";
 import { addCollaborator, cancelInvitation, removeCollaborator } from "@/lib/operations/shares";
@@ -53,6 +54,7 @@ async function resolveUser(): Promise<{ id: string; email: string } | null> {
 }
 
 export async function inviteCollaboratorAction(formData: FormData): Promise<void> {
+  await assertSameOrigin();
   const slug = String(formData.get("slug") ?? "");
   const user = await resolveUser();
   if (!user) shareRedirect(slug, "unauthenticated");
@@ -74,6 +76,7 @@ export async function inviteCollaboratorAction(formData: FormData): Promise<void
 }
 
 export async function removeCollaboratorAction(formData: FormData): Promise<void> {
+  await assertSameOrigin();
   const slug = String(formData.get("slug") ?? "");
   const user = await resolveUser();
   if (!user) shareRedirect(slug, "unauthenticated");
@@ -89,6 +92,7 @@ export async function removeCollaboratorAction(formData: FormData): Promise<void
 }
 
 export async function cancelInvitationAction(formData: FormData): Promise<void> {
+  await assertSameOrigin();
   const slug = String(formData.get("slug") ?? "");
   const user = await resolveUser();
   if (!user) shareRedirect(slug, "unauthenticated");

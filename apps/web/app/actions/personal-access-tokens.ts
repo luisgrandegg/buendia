@@ -3,6 +3,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { recordAudit } from "@buendia/db";
+import { assertSameOrigin } from "@/lib/assert-origin";
 import { PAT_REVEAL_COOKIE } from "@/lib/pat-reveal-cookie";
 import { mintPersonalAccessToken } from "@/lib/personal-access-tokens";
 import { createClient } from "@/lib/supabase/server";
@@ -33,6 +34,7 @@ function tokensRedirect(params: Record<string, string>): never {
 }
 
 export async function createPersonalAccessTokenAction(formData: FormData): Promise<void> {
+  await assertSameOrigin();
   const rawName = formData.get("name");
   const name = typeof rawName === "string" ? rawName.trim().slice(0, MAX_NAME_LENGTH) : "";
   if (!name) tokensRedirect({ create: "missing_name" satisfies CreateStatus });
@@ -82,6 +84,7 @@ export async function createPersonalAccessTokenAction(formData: FormData): Promi
 }
 
 export async function revokePersonalAccessTokenAction(formData: FormData): Promise<void> {
+  await assertSameOrigin();
   const rawId = formData.get("id");
   const id = typeof rawId === "string" ? rawId : "";
   if (!id) tokensRedirect({ revoke: "not_found" satisfies RevokeStatus });

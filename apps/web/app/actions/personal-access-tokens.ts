@@ -3,6 +3,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { recordAudit } from "@buendia/db";
+import { cookieSecure } from "@/lib/cookies";
 import { PAT_REVEAL_COOKIE } from "@/lib/pat-reveal-cookie";
 import { mintPersonalAccessToken } from "@/lib/personal-access-tokens";
 import { createClient } from "@/lib/supabase/server";
@@ -73,7 +74,7 @@ export async function createPersonalAccessTokenAction(formData: FormData): Promi
     value: JSON.stringify({ id: data.id, plaintext: minted.plaintext }),
     httpOnly: true,
     sameSite: "strict",
-    secure: process.env.NODE_ENV === "production",
+    secure: await cookieSecure(),
     path: "/settings/tokens",
     maxAge: REVEAL_TTL_SECONDS,
   });

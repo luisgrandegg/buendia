@@ -1,5 +1,6 @@
 import { cookies, headers } from "next/headers";
 import { NextResponse } from "next/server";
+import { cookieSecureFromHeaders } from "@/lib/cookies";
 import {
   buildAuthorizeUrl,
   codeChallengeFor,
@@ -28,7 +29,8 @@ export async function POST() {
   const codeVerifier = generateCodeVerifier();
   const codeChallenge = codeChallengeFor(codeVerifier);
 
-  const origin = originFromHeaders(await headers());
+  const requestHeaders = await headers();
+  const origin = originFromHeaders(requestHeaders);
   const redirectUri = supabaseCallbackUrl(origin);
 
   const authorizeUrl = buildAuthorizeUrl({
@@ -42,7 +44,7 @@ export async function POST() {
   cookieStore.set(OAUTH_STATE_COOKIE, JSON.stringify({ state, codeVerifier }), {
     httpOnly: true,
     sameSite: "lax",
-    secure: !origin.startsWith("http://localhost"),
+    secure: cookieSecureFromHeaders(requestHeaders),
     path: "/",
     maxAge: COOKIE_TTL_SECONDS,
   });

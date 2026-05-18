@@ -147,6 +147,17 @@ export default function LandingPage() {
             hosted; security falls back to RLS.
           </p>
         </article>
+        <article style={cardStyle}>
+          <h2 style={cardTitleStyle}>Build with Claude</h2>
+          <p style={cardBodyStyle}>
+            Ask Claude to <em>"host this on Buendia"</em>. {PRODUCT_NAME} ships a Model Context
+            Protocol server — paste a snippet into Claude Desktop or Claude Code and ship apps
+            without leaving the chat.{" "}
+            <Link href="/docs/mcp" style={{ color: "#2563eb" }}>
+              Setup →
+            </Link>
+          </p>
+        </article>
       </section>
 
       <section
@@ -197,6 +208,9 @@ export default function LandingPage() {
           fontSize: "0.8125rem",
         }}
       >
+        <Link href="/docs/mcp" style={{ color: "inherit", marginRight: "1rem" }}>
+          Use with Claude
+        </Link>
         <Link href="/docs/access-removal" style={{ color: "inherit", marginRight: "1rem" }}>
           Access removal
         </Link>

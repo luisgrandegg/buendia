@@ -20,9 +20,17 @@ apps/
   edge/      Hono — serves user apps with injected config
 packages/
   sdk/       @buendia/sdk — embedded in every user HTML
+  mcp/       @buendia/mcp — Model Context Protocol server for Claude
   shared/    Shared TS types, zod schemas, constants
   db/        Migrations, RLS policies, schema provisioner (placeholder)
 ```
+
+## Use with Claude
+
+Buendia ships a Model Context Protocol server so Claude (Desktop / Code / API)
+can host apps for you. Install with `npx -y @buendia/mcp` and a config snippet —
+full walkthrough at [`/docs/mcp`](https://buendia.app/docs/mcp) or in
+[`packages/mcp/README.md`](./packages/mcp/README.md).
 
 ## Local development
 

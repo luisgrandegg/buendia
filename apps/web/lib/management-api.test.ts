@@ -10,6 +10,7 @@ import {
   getProjectStatus,
   isFatalStatus,
   listOrganizations,
+  listRlsDisabledTables,
   ManagementApiError,
   projectUrl,
   waitForProjectReady,
@@ -64,6 +65,45 @@ describe("listOrganizations", () => {
   it("throws ManagementApiError on non-ok responses", async () => {
     mockFetchOnce({ status: 401, body: { message: "unauthorized" } });
     await expect(listOrganizations("at")).rejects.toBeInstanceOf(ManagementApiError);
+  });
+});
+
+describe("listRlsDisabledTables (audit §M8)", () => {
+  it("short-circuits when no schemas are provided (no HTTP call)", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const rows = await listRlsDisabledTables("at", "ref", []);
+    expect(rows).toEqual([]);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("queries pg_class via executeSql, scoped to the provided app_* schemas", async () => {
+    const fetchMock = mockFetchOnce({
+      body: [{ schema: "app_todos", table: "items" }],
+    });
+    const rows = await listRlsDisabledTables("at", "ref", ["app_todos", "app_chat"]);
+    expect(rows).toEqual([{ schema: "app_todos", table: "items" }]);
+
+    const [url, init] = fetchMock.mock.calls[0]!;
+    expect(url).toBe(`${API}/v1/projects/ref/database/query`);
+    expect((init as RequestInit).method).toBe("POST");
+    const body = JSON.parse(String((init as RequestInit).body)) as { query: string };
+    // Schemas land as quoted literals, not bare identifiers.
+    expect(body.query).toMatch(/'app_todos'/);
+    expect(body.query).toMatch(/'app_chat'/);
+    // The predicate is `not c.relrowsecurity`, not anything weaker.
+    expect(body.query).toMatch(/not c\.relrowsecurity/);
+  });
+
+  it("escapes embedded single quotes in schema names (belt-and-braces)", async () => {
+    // Schema names that reach this function are already regex-validated
+    // upstream, but the literal builder still escapes defensively.
+    const fetchMock = mockFetchOnce({ body: [] });
+    await listRlsDisabledTables("at", "ref", ["app_o'reilly"]);
+    const body = JSON.parse(String((fetchMock.mock.calls[0]![1] as RequestInit).body)) as {
+      query: string;
+    };
+    expect(body.query).toContain("'app_o''reilly'");
   });
 });
 

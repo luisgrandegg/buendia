@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { buildDropSchemaSql, buildProvisionSql, validateSchemaSql } from "./schema-provisioner";
+import {
+  buildDropSchemaSql,
+  buildProvisionSql,
+  quoteIdent,
+  validateSchemaSql,
+} from "./schema-provisioner";
 
 /**
  * Coverage for PR #13 (schema provisioner). The validator is a security
@@ -80,9 +85,20 @@ describe("buildProvisionSql", () => {
     const sql = buildProvisionSql("app_x", "create table todos (id uuid primary key);");
     expect(sql).toMatch(/^begin;/);
     expect(sql).toMatch(/commit;\s*$/);
-    expect(sql).toMatch(/drop schema if exists app_x cascade;/);
-    expect(sql).toMatch(/create schema app_x;/);
-    expect(sql).toMatch(/set local search_path = app_x, public;/);
+    expect(sql).toMatch(/drop schema if exists "app_x" cascade;/);
+    expect(sql).toMatch(/create schema "app_x";/);
+    expect(sql).toMatch(/set local search_path = "app_x", public;/);
+  });
+
+  it("quotes the schema identifier (defence-in-depth, audit §H1)", () => {
+    const sql = buildProvisionSql("app_x", "");
+    // Every identifier site uses the quoted form (e.g. alter table "app_x".%I).
+    expect(sql).toMatch(/"app_x"\./);
+    expect(sql).toMatch(/drop schema if exists "app_x"/);
+    expect(sql).toMatch(/create schema "app_x"/);
+    // The single string-literal site (pg_tables.schemaname = '<name>')
+    // is quoted as a literal, not an identifier — that's intentional.
+    expect(sql).toMatch(/schemaname = 'app_x'/);
   });
 
   it("embeds the user's DDL verbatim and ensures a trailing semicolon", () => {
@@ -121,9 +137,21 @@ describe("buildProvisionSql", () => {
 
   it("handles an empty user-supplied schema (still creates the schema)", () => {
     const sql = buildProvisionSql("app_x", "");
-    expect(sql).toMatch(/create schema app_x;/);
+    expect(sql).toMatch(/create schema "app_x";/);
     // No user body section means no straggling semicolons appear before the DO block.
     expect(sql).not.toMatch(/;\s*;/);
+  });
+});
+
+describe("quoteIdent", () => {
+  it("wraps identifiers in double quotes", () => {
+    expect(quoteIdent("app_x")).toBe('"app_x"');
+  });
+
+  it("doubles embedded double quotes (Postgres identifier escape)", () => {
+    // Not reachable through current input validation, but the function
+    // itself must be correct so the defence holds under regex drift.
+    expect(quoteIdent('weird"name')).toBe('"weird""name"');
   });
 });
 
@@ -133,7 +161,7 @@ describe("buildDropSchemaSql", () => {
     expect(() => buildDropSchemaSql("app_x; drop database neondb")).toThrow(/unsafe/);
   });
 
-  it("emits an idempotent cascade drop", () => {
-    expect(buildDropSchemaSql("app_x")).toBe("drop schema if exists app_x cascade;");
+  it("emits an idempotent cascade drop with a quoted identifier", () => {
+    expect(buildDropSchemaSql("app_x")).toBe('drop schema if exists "app_x" cascade;');
   });
 });

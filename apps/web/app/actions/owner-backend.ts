@@ -174,3 +174,101 @@ export async function disconnectBuendiaAction(): Promise<void> {
 
   redirect("/settings?disconnect=ok");
 }
+
+/* -----------------------------------------------------------------------
+ * Refresh credentials (ticket 62)
+ *
+ * The user manually rotated their Supabase JWT secret, or our stored
+ * keys went out of sync somehow. Trade the refresh token for a new
+ * access token, re-fetch the project's URL + publishable key + secret
+ * key + JWT secret, re-encrypt, write. The OAuth refresh token gets
+ * rotated through the same flow.
+ *
+ * Cheap reuse of ticket 11's primitives — same Management API calls,
+ * just without the project-creation step.
+ * --------------------------------------------------------------------- */
+
+type RefreshCredsStatus =
+  | "ok"
+  | "unauthenticated"
+  | "not_connected"
+  | "no_project"
+  | "oauth_refresh_failed"
+  | "fetch_keys_failed"
+  | "persist_failed";
+
+function refreshCredsFinish(status: RefreshCredsStatus): never {
+  redirect(`/settings?refresh_creds=${status}`);
+}
+
+export async function refreshCredentialsAction(): Promise<void> {
+  const { getProjectApiKeys, getProjectJwtSecret, projectUrl } =
+    await import("@/lib/management-api");
+  const { encrypt, loadMasterKey } = await import("@buendia/db");
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) refreshCredsFinish("unauthenticated");
+
+  const refreshToken = await getOwnerRefreshToken(user.id);
+  if (!refreshToken) refreshCredsFinish("not_connected");
+
+  const { data: backend } = await supabase
+    .from("owner_backends")
+    .select("supabase_project_ref")
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (!backend?.supabase_project_ref) refreshCredsFinish("no_project");
+
+  let access;
+  try {
+    access = await refreshAccessToken({
+      refreshToken,
+      clientId: env.supabaseOauthClientId,
+      clientSecret: env.supabaseOauthClientSecret,
+    });
+  } catch (err) {
+    console.error("[buendia] oauth refresh failed during creds refresh:", err);
+    refreshCredsFinish("oauth_refresh_failed");
+  }
+
+  let apiKeys;
+  let jwtSecret: string;
+  try {
+    [apiKeys, jwtSecret] = await Promise.all([
+      getProjectApiKeys(access.accessToken, backend.supabase_project_ref),
+      getProjectJwtSecret(access.accessToken, backend.supabase_project_ref),
+    ]);
+  } catch (err) {
+    console.error("[buendia] failed to fetch project keys for refresh:", err);
+    refreshCredsFinish("fetch_keys_failed");
+  }
+
+  const masterKey = loadMasterKey();
+  const { error } = await supabase
+    .from("owner_backends")
+    .update({
+      supabase_url: projectUrl(backend.supabase_project_ref),
+      supabase_publishable_key_encrypted: encrypt(apiKeys.publishableKey, masterKey),
+      supabase_secret_key_encrypted: encrypt(apiKeys.secretKey, masterKey),
+      supabase_jwt_secret_encrypted: encrypt(jwtSecret, masterKey),
+      supabase_oauth_refresh_token_encrypted: encrypt(access.refreshToken, masterKey),
+      grant_status: "ok",
+      last_validated_at: new Date().toISOString(),
+    })
+    .eq("user_id", user.id);
+  if (error) {
+    console.error("[buendia] persist failed during creds refresh:", error);
+    refreshCredsFinish("persist_failed");
+  }
+
+  await recordAudit(supabase, {
+    actorId: user.id,
+    action: "backend.credentials_refreshed",
+    metadata: { source: "manual" },
+  });
+
+  refreshCredsFinish("ok");
+}

@@ -6,31 +6,40 @@ import { createClient } from "@/lib/supabase/server";
  * encrypted columns never travel through code that doesn't need them.
  */
 
+export type GrantStatus = "ok" | "revoked" | "unknown";
+
 export interface OwnerBackendStatus {
   exists: boolean;
   connectedAt: string | null;
   hasProject: boolean;
+  grantStatus: GrantStatus;
+  lastValidatedAt: string | null;
 }
 
 export async function getOwnerBackendStatus(userId: string): Promise<OwnerBackendStatus> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("owner_backends")
-    .select("user_id, supabase_project_ref, connected_at")
+    .select("user_id, supabase_project_ref, connected_at, grant_status, last_validated_at")
     .eq("user_id", userId)
     .maybeSingle();
 
-  if (error) {
+  if (error || !data) {
     // RLS denies non-owner reads, which is fine; surface as "not connected".
-    return { exists: false, connectedAt: null, hasProject: false };
-  }
-  if (!data) {
-    return { exists: false, connectedAt: null, hasProject: false };
+    return {
+      exists: false,
+      connectedAt: null,
+      hasProject: false,
+      grantStatus: "ok",
+      lastValidatedAt: null,
+    };
   }
   return {
     exists: true,
     connectedAt: data.connected_at,
     hasProject: Boolean(data.supabase_project_ref),
+    grantStatus: (data.grant_status as GrantStatus | null) ?? "ok",
+    lastValidatedAt: data.last_validated_at,
   };
 }
 

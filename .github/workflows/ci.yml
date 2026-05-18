@@ -34,3 +34,18 @@ jobs:
 
       - name: Run ${{ matrix.task }}
         run: pnpm ${{ matrix.task }}
+
+  ci-gate:
+    name: CI
+    runs-on: ubuntu-latest
+    needs: [ci]
+    if: always()
+    steps:
+      - name: Verify all matrix jobs succeeded
+        # `needs.ci.result` aggregates the whole matrix: success only if
+        # every entry passed. Without the explicit check, branch
+        # protection could treat a skipped gate (after a matrix failure)
+        # as a non-failure.
+        run: |
+          echo "matrix result: ${{ needs.ci.result }}"
+          [[ "${{ needs.ci.result }}" == "success" ]] || exit 1

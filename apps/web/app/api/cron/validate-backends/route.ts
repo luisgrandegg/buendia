@@ -44,7 +44,7 @@ export async function GET(request: Request) {
   }
 
   const masterKey = loadMasterKey();
-  const { encrypt } = await import("@buendia/db");
+  const { byteaLiteral, encrypt } = await import("@buendia/db");
 
   let checked = 0;
   let ok = 0;
@@ -84,7 +84,9 @@ export async function GET(request: Request) {
       };
       // Supabase rotates the refresh token on every exchange; persist.
       if (access.refreshToken && access.refreshToken !== refreshToken) {
-        update.supabase_oauth_refresh_token_encrypted = encrypt(access.refreshToken, masterKey);
+        update.supabase_oauth_refresh_token_encrypted = byteaLiteral(
+          encrypt(access.refreshToken, masterKey),
+        );
       }
       await admin.from("owner_backends").update(update).eq("user_id", row.user_id);
 

@@ -121,3 +121,17 @@ export function decrypt(blob: Buffer, masterKey: Buffer): string {
 export function generateMasterKey(): string {
   return randomBytes(KEY_BYTES).toString("base64");
 }
+
+/**
+ * Render a Buffer as a PostgreSQL bytea literal (`\\x<hex>`).
+ *
+ * supabase-js sends the request body through `JSON.stringify`, which turns a
+ * raw Node `Buffer` into the object form `{ "type": "Buffer", "data": [...] }`
+ * — those bytes then end up sitting inside the `bytea` column verbatim, and
+ * the next read can't decrypt them ("unsupported credential blob version:
+ * 123" — 0x7b = `{`). Wrap every Buffer-bound write through this helper so
+ * the value reaches PostgreSQL in its proper bytea-literal form.
+ */
+export function byteaLiteral(buffer: Buffer): string {
+  return `\\x${buffer.toString("hex")}`;
+}

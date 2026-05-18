@@ -1,6 +1,12 @@
+import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 
-import { generateInvitationToken, invitationExpiry, invitationUrl } from "./invitations";
+import {
+  generateInvitationToken,
+  hashInvitationToken,
+  invitationExpiry,
+  invitationUrl,
+} from "./invitations";
 
 /**
  * Coverage for PR #17 (share invite UI) and PR #26 (pending-invitation flow).
@@ -40,6 +46,23 @@ describe("invitationExpiry", () => {
     const delta = exp.getTime();
     expect(delta).toBeGreaterThanOrEqual(before + 14 * 24 * 60 * 60 * 1000 - 50);
     expect(delta).toBeLessThanOrEqual(after + 14 * 24 * 60 * 60 * 1000 + 50);
+  });
+});
+
+describe("hashInvitationToken (audit §L3)", () => {
+  it("is SHA-256 of the plaintext bytes", () => {
+    const tok = generateInvitationToken();
+    const expected = createHash("sha256").update(tok, "utf8").digest();
+    expect(hashInvitationToken(tok).equals(expected)).toBe(true);
+  });
+
+  it("is deterministic — same input, same hash", () => {
+    const tok = "abc";
+    expect(hashInvitationToken(tok).equals(hashInvitationToken(tok))).toBe(true);
+  });
+
+  it("returns a 32-byte buffer (SHA-256 width)", () => {
+    expect(hashInvitationToken("x").length).toBe(32);
   });
 });
 

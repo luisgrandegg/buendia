@@ -305,45 +305,47 @@ describe("background JWT refresh (PR #18)", () => {
 });
 
 describe("standalone mode (PR #20)", () => {
-  it("reads existing config from localStorage and produces a standalone client", async () => {
+  it("always prompts for the publishable key, even when URL + schema are remembered (audit §M9)", async () => {
+    // Persisted shape stores URL + schema only — the publishable key is
+    // never written to localStorage.
     localStorage.setItem(
       "buendia:standalone",
-      JSON.stringify({
-        supabaseUrl: "https://x.supabase.co",
-        publishableKey: "sb_publishable_x",
-        schema: "app_local",
-      }),
+      JSON.stringify({ supabaseUrl: "https://x.supabase.co", schema: "app_local" }),
     );
-
-    const { init } = await import("./index");
-    const platform = await init();
-
-    expect(platform.mode).toBe("standalone");
-    expect(platform.user).toEqual({ id: "anonymous", email: "", role: "viewer" });
-    expect(platform.app.slug).toBe("app_local");
-
-    const client = clients.at(-1)!;
-    expect(client.url).toBe("https://x.supabase.co");
-    expect(client.key).toBe("sb_publishable_x");
-    const options = client.options as {
-      db: { schema: string };
-      global: { headers: Record<string, string> };
-    };
-    expect(options.db.schema).toBe("app_local");
-    expect(options.global.headers["Accept-Profile"]).toBe("app_local");
-  });
-
-  it("ignores a malformed localStorage entry and falls through to the overlay", async () => {
-    localStorage.setItem("buendia:standalone", "not json");
 
     const { init } = await import("./index");
     const initPromise = init();
 
-    // The overlay should appear in the DOM.
     const overlay = document.getElementById("buendia-standalone-overlay");
     expect(overlay).not.toBeNull();
 
-    // Submit the form.
+    const form = overlay!.querySelector<HTMLFormElement>("#buendia-standalone-form")!;
+    const urlInput = form.querySelector<HTMLInputElement>('input[name="url"]')!;
+    const schemaInput = form.querySelector<HTMLInputElement>('input[name="schema"]')!;
+    const keyInput = form.querySelector<HTMLInputElement>('input[name="key"]')!;
+
+    // URL + schema are pre-filled; key is blank.
+    expect(urlInput.value).toBe("https://x.supabase.co");
+    expect(schemaInput.value).toBe("app_local");
+    expect(keyInput.value).toBe("");
+
+    keyInput.value = "sb_publishable_x";
+    form.dispatchEvent(new window.Event("submit", { cancelable: true, bubbles: true }));
+
+    const platform = await initPromise;
+    expect(platform.mode).toBe("standalone");
+    const client = clients.at(-1)!;
+    expect(client.url).toBe("https://x.supabase.co");
+    expect(client.key).toBe("sb_publishable_x");
+  });
+
+  it("persists URL + schema after submit, but never the publishable key (audit §M9)", async () => {
+    const { init } = await import("./index");
+    const initPromise = init();
+
+    const overlay = document.getElementById("buendia-standalone-overlay");
+    expect(overlay).not.toBeNull();
+
     const form = overlay!.querySelector<HTMLFormElement>("#buendia-standalone-form")!;
     (form.querySelector('input[name="url"]') as HTMLInputElement).value = "https://y.supabase.co";
     (form.querySelector('input[name="key"]') as HTMLInputElement).value = "sb_publishable_y";
@@ -353,23 +355,42 @@ describe("standalone mode (PR #20)", () => {
     const platform = await initPromise;
     expect(platform.mode).toBe("standalone");
     expect(platform.app.slug).toBe("app_y");
-    // The overlay self-removes after submit.
     expect(document.getElementById("buendia-standalone-overlay")).toBeNull();
-    // Submitted values get persisted for next reload.
-    expect(JSON.parse(localStorage.getItem("buendia:standalone")!)).toEqual({
-      supabaseUrl: "https://y.supabase.co",
-      publishableKey: "sb_publishable_y",
-      schema: "app_y",
-    });
+
+    const persisted = JSON.parse(localStorage.getItem("buendia:standalone")!) as Record<
+      string,
+      unknown
+    >;
+    expect(persisted).toEqual({ supabaseUrl: "https://y.supabase.co", schema: "app_y" });
+    // Crucially, the key is *not* in the stored blob.
+    expect(persisted.publishableKey).toBeUndefined();
   });
 
-  it("rejects a partial localStorage entry and prompts", async () => {
+  it("ignores a malformed localStorage entry and falls through to a blank overlay", async () => {
+    localStorage.setItem("buendia:standalone", "not json");
+
+    const { init } = await import("./index");
+    void init();
+
+    const overlay = document.getElementById("buendia-standalone-overlay");
+    expect(overlay).not.toBeNull();
+
+    const form = overlay!.querySelector<HTMLFormElement>("#buendia-standalone-form")!;
+    expect((form.querySelector('input[name="url"]') as HTMLInputElement).value).toBe("");
+    expect((form.querySelector('input[name="schema"]') as HTMLInputElement).value).toBe("");
+  });
+
+  it("rejects a partial localStorage entry (no schema) and falls through to a blank overlay", async () => {
     localStorage.setItem(
       "buendia:standalone",
       JSON.stringify({ supabaseUrl: "https://x.supabase.co" }),
     );
     const { init } = await import("./index");
     void init();
-    expect(document.getElementById("buendia-standalone-overlay")).not.toBeNull();
+    const overlay = document.getElementById("buendia-standalone-overlay");
+    expect(overlay).not.toBeNull();
+
+    const form = overlay!.querySelector<HTMLFormElement>("#buendia-standalone-form")!;
+    expect((form.querySelector('input[name="url"]') as HTMLInputElement).value).toBe("");
   });
 });

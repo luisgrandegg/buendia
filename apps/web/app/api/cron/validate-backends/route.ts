@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { decrypt, loadMasterKey, recordAudit } from "@buendia/db";
 import { env } from "@/lib/env";
@@ -30,7 +31,13 @@ import { createAdminClient } from "@/lib/supabase/admin";
  */
 export async function GET(request: Request) {
   const expected = `Bearer ${env.cronSecret}`;
-  if (request.headers.get("authorization") !== expected) {
+  // Constant-time compare. The risk at a 32-byte secret is small, but
+  // `!==` returns early on the first mismatching byte, which is the
+  // textbook timing-leak pattern. See SECURITY_AUDIT.md §H2.
+  const received = request.headers.get("authorization") ?? "";
+  const a = Buffer.from(received);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length || !timingSafeEqual(a, b)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 

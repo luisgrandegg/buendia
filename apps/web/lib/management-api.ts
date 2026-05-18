@@ -187,14 +187,67 @@ export async function getProjectJwtSecret(
   accessToken: string,
   projectRef: string,
 ): Promise<string> {
-  const data = await callManagementApi<{ jwt_secret?: string }>(
+  // Path A — legacy projects expose the HS256 secret directly on
+  // /config/auth. Newly-created projects (post the asymmetric signing-key
+  // rollout in 2025-2026) no longer return this field and we fall through
+  // to the signing-keys endpoint.
+  const legacy = await callManagementApi<{ jwt_secret?: string }>(
     `/v1/projects/${projectRef}/config/auth`,
     { accessToken },
   );
-  if (!data.jwt_secret) {
-    throw new Error(`Supabase project ${projectRef} did not return a jwt_secret`);
+  if (legacy.jwt_secret) return legacy.jwt_secret;
+
+  // Path B — signing-keys endpoint. Supabase keeps an in-use HS256 key
+  // for new projects too (PostgREST needs a shared secret for HMAC
+  // verification). Reveal it via the per-key endpoint.
+  type SigningKeySummary = {
+    id?: string;
+    algorithm?: string;
+    status?: string;
+  };
+  const keys = await callManagementApi<SigningKeySummary[]>(
+    `/v1/projects/${projectRef}/config/auth/signing-keys`,
+    { accessToken },
+  );
+  const hs = keys.find(
+    (k) =>
+      typeof k.algorithm === "string" &&
+      k.algorithm.toUpperCase().startsWith("HS") &&
+      (k.status === "in_use" || k.status === "active" || k.status === "current"),
+  );
+  if (!hs?.id) {
+    console.error(
+      "[buendia] getProjectJwtSecret: no HS256 in signing-keys response:",
+      JSON.stringify(keys),
+    );
+    throw new Error(
+      `Supabase project ${projectRef}: no jwt_secret on /config/auth and no in-use HS key in /config/auth/signing-keys`,
+    );
   }
-  return data.jwt_secret;
+
+  type RevealedKey = {
+    id?: string;
+    algorithm?: string;
+    status?: string;
+    secret?: string;
+    private_key?: string;
+    private_jwk?: { k?: string; kty?: string };
+    jwt_secret?: string;
+  };
+  const revealed = await callManagementApi<RevealedKey>(
+    `/v1/projects/${projectRef}/config/auth/signing-keys/${hs.id}?reveal=true`,
+    { accessToken },
+  );
+  const secret =
+    revealed.secret || revealed.jwt_secret || revealed.private_key || revealed.private_jwk?.k;
+  if (!secret) {
+    console.error(
+      "[buendia] getProjectJwtSecret: revealed key missing secret material:",
+      JSON.stringify({ ...revealed, secret: undefined, private_key: undefined }),
+    );
+    throw new Error(`Supabase project ${projectRef}: signing key ${hs.id} returned no HS secret`);
+  }
+  return secret;
 }
 
 export function projectUrl(projectRef: string): string {

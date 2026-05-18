@@ -48,6 +48,23 @@ function mockFetchOnce(spec: CallSpec) {
   return fetchMock;
 }
 
+/** Queue up responses for a multi-call code path; later calls reuse the
+ *  last spec so a test can be tolerant of extra retries. */
+function mockFetchSequence(specs: CallSpec[]) {
+  const queue = [...specs];
+  const fetchMock = vi.fn<FetchFn>(async () => {
+    const spec = queue.length > 1 ? queue.shift()! : queue[0]!;
+    const status = spec.status ?? 200;
+    if (status === 204) return new Response(null, { status });
+    return new Response(JSON.stringify(spec.body ?? {}), {
+      status,
+      headers: { "Content-Type": "application/json" },
+    });
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  return fetchMock;
+}
+
 describe("listOrganizations", () => {
   it("GETs /v1/organizations with a Bearer token", async () => {
     const fetchMock = mockFetchOnce({ body: [{ id: "org-1", name: "Acme" }] });
@@ -188,14 +205,46 @@ describe("getProjectApiKeys", () => {
 });
 
 describe("getProjectJwtSecret", () => {
-  it("returns the project JWT secret from the auth config", async () => {
+  it("returns the legacy jwt_secret when /config/auth exposes one", async () => {
     mockFetchOnce({ body: { jwt_secret: "the-secret" } });
     expect(await getProjectJwtSecret("at", "ref")).toBe("the-secret");
   });
 
-  it("throws when the project doesn't return one", async () => {
-    mockFetchOnce({ body: {} });
-    await expect(getProjectJwtSecret("at", "ref")).rejects.toThrow(/jwt_secret/);
+  it("falls back to /config/auth/signing-keys when the legacy field is missing", async () => {
+    const fetchMock = mockFetchSequence([
+      // /config/auth — no jwt_secret (asymmetric-signing project)
+      { body: {} },
+      // /config/auth/signing-keys — list returns an in-use HS256 key
+      { body: [{ id: "k1", algorithm: "HS256", status: "in_use" }] },
+      // /config/auth/signing-keys/k1?reveal=true — exposes the secret
+      { body: { id: "k1", algorithm: "HS256", secret: "rotated-hs256-secret" } },
+    ]);
+    expect(await getProjectJwtSecret("at", "ref")).toBe("rotated-hs256-secret");
+    const calls = fetchMock.mock.calls.map((c) => String(c[0]));
+    expect(calls).toEqual([
+      `${API}/v1/projects/ref/config/auth`,
+      `${API}/v1/projects/ref/config/auth/signing-keys`,
+      `${API}/v1/projects/ref/config/auth/signing-keys/k1?reveal=true`,
+    ]);
+  });
+
+  it("accepts the JWK form when the revealed key returns private_jwk.k", async () => {
+    mockFetchSequence([
+      { body: {} },
+      { body: [{ id: "k2", algorithm: "HS512", status: "in_use" }] },
+      { body: { id: "k2", private_jwk: { k: "jwk-secret-bytes" } } },
+    ]);
+    expect(await getProjectJwtSecret("at", "ref")).toBe("jwk-secret-bytes");
+  });
+
+  it("throws when neither path finds a secret", async () => {
+    mockFetchSequence([
+      { body: {} },
+      { body: [{ id: "rs1", algorithm: "RS256", status: "in_use" }] },
+    ]);
+    await expect(getProjectJwtSecret("at", "ref")).rejects.toThrow(
+      /no jwt_secret on \/config\/auth and no in-use HS key/,
+    );
   });
 });
 

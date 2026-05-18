@@ -15,15 +15,37 @@ export const SUPABASE_OAUTH_AUTHORIZE_URL = "https://api.supabase.com/v1/oauth/a
 export const SUPABASE_OAUTH_TOKEN_URL = "https://api.supabase.com/v1/oauth/token";
 
 /**
- * The scopes Buendia needs on the user's Supabase organization. We ask only
- * for what tickets 10 and 11 need today; rotation logic (62) and disconnect
- * (52) ride on the same grant.
+ * The scopes Buendia needs on the user's Supabase organization. The set
+ * is small and corresponds 1:1 to the Management API endpoints we hit:
+ *
+ *   - organizations.read → list the user's orgs at provision time.
+ *   - projects.read      → poll project status while it's spinning up.
+ *   - projects.write     → create the "Buendia Apps" project.
+ *   - secrets.read       → fetch publishable + secret API keys for the
+ *                          newly created project.
+ *   - auth_config_read   → fetch the project's JWT secret so we can
+ *                          mint per-user JWTs against the user's
+ *                          PostgREST. Without this, /v1/projects/<ref>
+ *                          /config/auth returns 403 and provisioning
+ *                          gets "Project created, but Buendia couldn't
+ *                          read its API keys."
+ *   - database.write     → run the schema provisioner's SQL via the
+ *                          Management API's database/query endpoint.
+ *                          Needed for app schema creation + drop on
+ *                          delete.
+ *
+ * If you change this list, you also need to update the Supabase OAuth
+ * app registration (org → Apps → your Buendia app → Permissions) to
+ * grant the new scopes — Supabase only honours scopes the app was
+ * registered with, even if we request them here.
  */
 export const SUPABASE_OAUTH_SCOPES = [
   "organizations.read",
   "projects.read",
   "projects.write",
   "secrets.read",
+  "auth_config_read",
+  "database.write",
 ];
 
 const VERIFIER_BYTES = 48;

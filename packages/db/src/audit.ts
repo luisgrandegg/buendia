@@ -12,6 +12,13 @@
  * wrong call. Reach for the storage that's encrypted at rest instead.
  */
 
+/**
+ * The canonical list of audit actions. The control-plane DB enforces a
+ * CHECK constraint mirroring these values
+ * (`packages/db/migrations/0013_audit_log_hardening.sql`). When you add
+ * a value here, ship a migration that widens the constraint in lockstep
+ * — otherwise the insert will fail at runtime.
+ */
 export const AUDIT_ACTIONS = [
   "auth.signed_up",
   "auth.signed_in",

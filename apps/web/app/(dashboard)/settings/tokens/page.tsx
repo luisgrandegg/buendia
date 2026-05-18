@@ -170,6 +170,53 @@ export default async function TokensPage({ searchParams }: PageProps) {
         </form>
       </section>
 
+      <section
+        style={{
+          marginBottom: "2.5rem",
+          padding: "1rem 1.25rem",
+          border: "1px solid #e5e7eb",
+          background: "#f9fafb",
+          borderRadius: "0.375rem",
+        }}
+      >
+        <h2 style={{ fontSize: "1rem", margin: "0 0 0.5rem 0" }}>Use with Claude</h2>
+        <p style={{ fontSize: "0.9375rem", color: "#374151", margin: "0 0 0.75rem 0" }}>
+          Buendia ships a Model Context Protocol server so Claude can host apps for you. Set the
+          token as an env var, then paste this block into Claude Desktop or Claude Code:
+        </p>
+        <code
+          style={{
+            display: "block",
+            padding: "0.75rem 0.875rem",
+            borderRadius: "0.375rem",
+            border: "1px solid #e5e7eb",
+            background: "white",
+            fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+            fontSize: "0.8125rem",
+            lineHeight: "1.55",
+            whiteSpace: "pre",
+            overflowX: "auto",
+            color: "#111827",
+          }}
+        >
+          {`{
+  "mcpServers": {
+    "buendia": {
+      "command": "npx",
+      "args": ["-y", "@buendia/mcp"],
+      "env": { "BUENDIA_PAT": "\${BUENDIA_PAT}" }
+    }
+  }
+}`}
+        </code>
+        <p style={{ fontSize: "0.875rem", color: "#4b5563", margin: "0.625rem 0 0 0" }}>
+          Full walkthrough →{" "}
+          <Link href="/docs/mcp" style={{ color: "#2563eb" }}>
+            /docs/mcp
+          </Link>
+        </p>
+      </section>
+
       <section>
         <h2 style={{ fontSize: "1rem", marginBottom: "0.75rem" }}>Your tokens</h2>
         {!tokens || tokens.length === 0 ? (

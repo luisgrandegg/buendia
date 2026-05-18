@@ -11,8 +11,12 @@ concurrency:
 
 jobs:
   ci:
-    name: Lint, typecheck, test, build
+    name: ${{ matrix.task }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        task: [lint, typecheck, test, build, format:check]
     steps:
       - uses: actions/checkout@v4
 
@@ -28,17 +32,5 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Lint
-        run: pnpm lint
-
-      - name: Typecheck
-        run: pnpm typecheck
-
-      - name: Test
-        run: pnpm test
-
-      - name: Build
-        run: pnpm build
-
-      - name: Prettier check
-        run: pnpm format:check
+      - name: Run ${{ matrix.task }}
+        run: pnpm ${{ matrix.task }}

@@ -77,8 +77,16 @@ export async function init(): Promise<BuendiaClient> {
     return buildHostedClient(window.__APP_CONFIG__);
   }
 
-  const standalone = readStandaloneConfig() ?? (await promptStandaloneConfig());
+  const standalone = await resolveStandaloneConfig();
   return buildStandaloneClient(standalone);
+}
+
+async function resolveStandaloneConfig(): Promise<StandaloneConfig> {
+  // The publishable key is never persisted (see PersistedStandaloneConfig).
+  // If we have a remembered URL + schema, pre-fill them in the overlay so
+  // the user only has to re-paste the key — otherwise prompt for all three.
+  const remembered = readPersistedStandalone();
+  return promptStandaloneConfig(remembered);
 }
 
 function buildHostedClient(config: BuendiaAppConfig): BuendiaClient {
@@ -187,20 +195,32 @@ interface StandaloneConfig {
   schema: string;
 }
 
-function readStandaloneConfig(): StandaloneConfig | null {
+/**
+ * What we persist between sessions. The publishable key is **not**
+ * stored — even though Supabase calls it "publishable," any XSS on the
+ * host page exfiltrates it from `localStorage`, and standalone apps
+ * are typically opened from `file://` or static hosts where the
+ * threat surface is hard to reason about. Re-prompt for the key on
+ * each session; the URL + schema (which aren't secrets) stay so the
+ * user doesn't have to re-enter the full triple every reload.
+ *
+ * See SECURITY_AUDIT.md §M9 and backlog/74-rls-validation-cron-and-nits.md.
+ */
+interface PersistedStandaloneConfig {
+  supabaseUrl: string;
+  schema: string;
+}
+
+function readPersistedStandalone(): PersistedStandaloneConfig | null {
   if (typeof localStorage === "undefined") return null;
   try {
     const raw = localStorage.getItem(STANDALONE_LOCAL_STORAGE_KEY);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as Partial<StandaloneConfig>;
-    if (!parsed.supabaseUrl || !parsed.publishableKey || !parsed.schema) {
+    const parsed = JSON.parse(raw) as Partial<PersistedStandaloneConfig>;
+    if (!parsed.supabaseUrl || !parsed.schema) {
       return null;
     }
-    return {
-      supabaseUrl: parsed.supabaseUrl,
-      publishableKey: parsed.publishableKey,
-      schema: parsed.schema,
-    };
+    return { supabaseUrl: parsed.supabaseUrl, schema: parsed.schema };
   } catch {
     return null;
   }
@@ -209,7 +229,11 @@ function readStandaloneConfig(): StandaloneConfig | null {
 function persistStandaloneConfig(config: StandaloneConfig): void {
   if (typeof localStorage === "undefined") return;
   try {
-    localStorage.setItem(STANDALONE_LOCAL_STORAGE_KEY, JSON.stringify(config));
+    const persisted: PersistedStandaloneConfig = {
+      supabaseUrl: config.supabaseUrl,
+      schema: config.schema,
+    };
+    localStorage.setItem(STANDALONE_LOCAL_STORAGE_KEY, JSON.stringify(persisted));
   } catch {
     // Some environments (private mode, certain webviews) deny
     // localStorage. The session still works for the lifetime of the
@@ -217,7 +241,9 @@ function persistStandaloneConfig(config: StandaloneConfig): void {
   }
 }
 
-function promptStandaloneConfig(): Promise<StandaloneConfig> {
+function promptStandaloneConfig(
+  remembered: PersistedStandaloneConfig | null = null,
+): Promise<StandaloneConfig> {
   if (typeof document === "undefined") {
     return Promise.reject(new Error("Buendia: standalone overlay needs a DOM"));
   }
@@ -261,6 +287,7 @@ function promptStandaloneConfig(): Promise<StandaloneConfig> {
           Supabase project URL
         </label>
         <input name="url" type="url" required placeholder="https://your-project.supabase.co"
+          value="${escapeAttr(remembered?.supabaseUrl ?? "")}"
           style="width:100%;padding:0.5rem 0.75rem;border-radius:0.375rem;
                  border:1px solid #d1d5db;font-size:0.9375rem;margin-bottom:0.875rem;
                  box-sizing:border-box;" />
@@ -278,6 +305,7 @@ function promptStandaloneConfig(): Promise<StandaloneConfig> {
           Schema name
         </label>
         <input name="schema" type="text" required placeholder="app_my_slug" pattern="^[a-z][a-z0-9_]*$"
+          value="${escapeAttr(remembered?.schema ?? "")}"
           style="width:100%;padding:0.5rem 0.75rem;border-radius:0.375rem;
                  border:1px solid #d1d5db;font-size:0.9375rem;
                  font-family:ui-monospace,monospace;margin-bottom:1rem;
@@ -287,8 +315,9 @@ function promptStandaloneConfig(): Promise<StandaloneConfig> {
                   padding:0.625rem 0.75rem;border-radius:0.375rem;
                   font-size:0.8125rem;margin:0 0 1rem 0;line-height:1.5;">
           Standalone mode uses the publishable key directly. Security depends entirely on
-          your project's RLS policies. To get per-user auth and revocation, host the app on
-          Buendia.
+          your project's RLS policies. The URL and schema are remembered; the key is
+          re-asked every session so it doesn't sit in localStorage between sessions. To
+          get per-user auth and revocation, host the app on Buendia.
         </p>
 
         <div style="display:flex;justify-content:flex-end;">
@@ -301,6 +330,13 @@ function promptStandaloneConfig(): Promise<StandaloneConfig> {
     `;
 
     document.body.appendChild(overlay);
+
+    // If we pre-filled URL + schema, drop focus on the key input so the
+    // user can just paste.
+    if (remembered) {
+      const keyInput = overlay.querySelector<HTMLInputElement>('input[name="key"]');
+      keyInput?.focus();
+    }
 
     const form = overlay.querySelector<HTMLFormElement>("#buendia-standalone-form");
     form?.addEventListener("submit", (event) => {
@@ -318,6 +354,16 @@ function promptStandaloneConfig(): Promise<StandaloneConfig> {
       resolve(config);
     });
   });
+}
+
+function escapeAttr(value: string): string {
+  // Pre-fill values go into an HTML attribute via template literal —
+  // ensure quotes / angle brackets can't break out.
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
 }
 
 function buildStandaloneClient(config: StandaloneConfig): BuendiaClient {

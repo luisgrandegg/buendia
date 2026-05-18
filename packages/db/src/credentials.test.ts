@@ -1,4 +1,4 @@
-import { randomBytes } from "node:crypto";
+import { createCipheriv, randomBytes } from "node:crypto";
 import { describe, expect, it } from "vitest";
 
 import { byteaLiteral, decrypt, encrypt, generateMasterKey, loadMasterKey } from "./credentials";
@@ -40,11 +40,11 @@ describe("encrypt / decrypt round-trip", () => {
     expect(decrypt(blob, key)).toBe(plaintext);
   });
 
-  it("produces a versioned, self-contained blob", () => {
+  it("produces a versioned, self-contained blob (current version is v2 with AAD)", () => {
     const key = freshMasterKey();
     const blob = encrypt("anything", key);
     // version + DEK IV(12) + wrappedDEK(32) + DEK tag(16) + value IV(12) + ct + value tag(16)
-    expect(blob[0]).toBe(0x01);
+    expect(blob[0]).toBe(0x02);
     expect(blob.length).toBeGreaterThanOrEqual(1 + 12 + 32 + 16 + 12 + 16);
   });
 
@@ -84,8 +84,20 @@ describe("decrypt failure modes", () => {
     const key = freshMasterKey();
     const blob = encrypt("hi", key);
     const tampered = Buffer.from(blob);
-    tampered[0] = 0x02;
+    tampered[0] = 0x03; // 0x01 and 0x02 are the supported versions
     expect(() => decrypt(tampered, key)).toThrow(/version/);
+  });
+
+  it("rejects a v2 blob whose version byte was flipped to v1 (AAD mismatch)", () => {
+    // Standard downgrade attempt — the cleartext envelope is the same shape
+    // for both versions, but flipping 0x02 → 0x01 strips the AAD on the
+    // verify path, so the GCM auth tag no longer matches.
+    const key = freshMasterKey();
+    const blob = encrypt("payload", key);
+    expect(blob[0]).toBe(0x02);
+    const tampered = Buffer.from(blob);
+    tampered[0] = 0x01;
+    expect(() => decrypt(tampered, key)).toThrow();
   });
 
   it("rejects blobs that are too short to be valid", () => {
@@ -133,6 +145,43 @@ describe("byteaLiteral", () => {
     const recovered = Buffer.from(literal.slice(2), "hex");
     expect(recovered.equals(blob)).toBe(true);
     expect(decrypt(recovered, key)).toBe(plaintext);
+  });
+});
+
+describe("v1 blob backward compatibility (audit §L2)", () => {
+  // Existing owner_backends rows were written before v2 (which added AAD).
+  // The decrypt path must keep accepting them so a rolling deploy / older
+  // rows in storage don't break. We build a v1 blob from raw crypto
+  // primitives — encrypt() now only emits v2.
+  function buildV1Blob(plaintext: string, masterKey: Buffer): Buffer {
+    const dek = randomBytes(32);
+    const dekIv = randomBytes(12);
+    const valueIv = randomBytes(12);
+
+    const dekCipher = createCipheriv("aes-256-gcm", masterKey, dekIv);
+    const wrappedDek = Buffer.concat([dekCipher.update(dek), dekCipher.final()]);
+    const dekTag = dekCipher.getAuthTag();
+
+    const valueCipher = createCipheriv("aes-256-gcm", dek, valueIv);
+    const ct = Buffer.concat([valueCipher.update(plaintext, "utf8"), valueCipher.final()]);
+    const valueTag = valueCipher.getAuthTag();
+
+    return Buffer.concat([Buffer.from([0x01]), dekIv, wrappedDek, dekTag, valueIv, ct, valueTag]);
+  }
+
+  it("decrypts a legacy v1 blob (no AAD) correctly", () => {
+    const key = freshMasterKey();
+    const blob = buildV1Blob("legacy-secret", key);
+    expect(blob[0]).toBe(0x01);
+    expect(decrypt(blob, key)).toBe("legacy-secret");
+  });
+
+  it("rejects a v1 blob whose version byte was bumped to v2 (AAD mismatch)", () => {
+    const key = freshMasterKey();
+    const blob = buildV1Blob("legacy-secret", key);
+    const tampered = Buffer.from(blob);
+    tampered[0] = 0x02;
+    expect(() => decrypt(tampered, key)).toThrow();
   });
 });
 

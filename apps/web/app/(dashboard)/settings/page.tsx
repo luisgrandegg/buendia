@@ -1,4 +1,4 @@
-import { provisionProjectAction } from "@/app/actions/owner-backend";
+import { provisionProjectAction, refreshCredentialsAction } from "@/app/actions/owner-backend";
 import { createClient } from "@/lib/supabase/server";
 import { getOwnerBackendStatus } from "@/lib/owner-backend";
 
@@ -82,8 +82,38 @@ const disconnectMessages: Record<string, { tone: "ok" | "warn"; text: string }> 
   },
 };
 
+const refreshCredsMessages: Record<string, { tone: "ok" | "warn"; text: string }> = {
+  ok: { tone: "ok", text: "Credentials refreshed from Supabase." },
+  unauthenticated: { tone: "warn", text: "Sign in and try again." },
+  not_connected: {
+    tone: "warn",
+    text: "Connect Supabase first before refreshing credentials.",
+  },
+  no_project: {
+    tone: "warn",
+    text: "Provision your project first, then refresh credentials.",
+  },
+  oauth_refresh_failed: {
+    tone: "warn",
+    text: "Supabase refused the stored OAuth grant. Reconnect from this page to recover.",
+  },
+  fetch_keys_failed: {
+    tone: "warn",
+    text: "Couldn't read the project's API keys. Please try again.",
+  },
+  persist_failed: {
+    tone: "warn",
+    text: "Got fresh keys from Supabase but couldn't save them. Try again.",
+  },
+};
+
 interface PageProps {
-  searchParams: Promise<{ supabase?: string; provision?: string; disconnect?: string }>;
+  searchParams: Promise<{
+    supabase?: string;
+    provision?: string;
+    disconnect?: string;
+    refresh_creds?: string;
+  }>;
 }
 
 export default async function SettingsPage({ searchParams }: PageProps) {
@@ -97,18 +127,58 @@ export default async function SettingsPage({ searchParams }: PageProps) {
     supabase: supabaseParam,
     provision: provisionParam,
     disconnect: disconnectParam,
+    refresh_creds: refreshCredsParam,
   } = await searchParams;
   const banner =
+    (refreshCredsParam && refreshCredsMessages[refreshCredsParam]) ||
     (disconnectParam && disconnectMessages[disconnectParam]) ||
     (provisionParam && provisionMessages[provisionParam]) ||
     (supabaseParam && supabaseMessages[supabaseParam]) ||
     undefined;
+
+  const grantRevoked = status?.exists && status.grantStatus === "revoked";
 
   return (
     <div>
       <header style={{ marginBottom: "1.5rem" }}>
         <h1 style={{ fontSize: "1.5rem", margin: 0 }}>Settings</h1>
       </header>
+
+      {grantRevoked ? (
+        <div
+          role="alert"
+          style={{
+            padding: "0.875rem 1rem",
+            marginBottom: "1.5rem",
+            borderRadius: "0.375rem",
+            border: "1px solid #fecaca",
+            background: "#fef2f2",
+            color: "#991b1b",
+            fontSize: "0.9375rem",
+            lineHeight: "1.5",
+          }}
+        >
+          <strong>Supabase connection broken.</strong> The OAuth grant Buendia held was revoked
+          (possibly from your Supabase dashboard). Apps are temporarily unavailable until you
+          reconnect.
+          <form action="/api/auth/supabase/start" method="post" style={{ marginTop: "0.625rem" }}>
+            <button
+              type="submit"
+              style={{
+                padding: "0.375rem 0.75rem",
+                borderRadius: "0.375rem",
+                border: "1px solid #991b1b",
+                background: "white",
+                color: "#991b1b",
+                fontSize: "0.875rem",
+                cursor: "pointer",
+              }}
+            >
+              Reconnect Supabase
+            </button>
+          </form>
+        </div>
+      ) : null}
 
       {banner ? (
         <div
@@ -189,18 +259,46 @@ function ConnectedBackendDetails({
   status: Awaited<ReturnType<typeof getOwnerBackendStatus>>;
 }) {
   return (
-    <dl style={{ margin: 0 }}>
-      <div style={rowStyle}>
-        <dt style={labelStyle}>Supabase</dt>
-        <dd style={{ margin: 0 }}>Connected · project provisioned</dd>
-      </div>
-      <div style={rowStyle}>
-        <dt style={labelStyle}>Connected at</dt>
-        <dd style={{ margin: 0 }}>
-          {status.connectedAt ? new Date(status.connectedAt).toLocaleString() : "—"}
-        </dd>
-      </div>
-    </dl>
+    <div>
+      <dl style={{ margin: 0 }}>
+        <div style={rowStyle}>
+          <dt style={labelStyle}>Supabase</dt>
+          <dd style={{ margin: 0 }}>Connected · project provisioned</dd>
+        </div>
+        <div style={rowStyle}>
+          <dt style={labelStyle}>Connected at</dt>
+          <dd style={{ margin: 0 }}>
+            {status.connectedAt ? new Date(status.connectedAt).toLocaleString() : "—"}
+          </dd>
+        </div>
+        <div style={rowStyle}>
+          <dt style={labelStyle}>Last checked</dt>
+          <dd style={{ margin: 0 }}>
+            {status.lastValidatedAt ? new Date(status.lastValidatedAt).toLocaleString() : "—"}
+          </dd>
+        </div>
+      </dl>
+      <form action={refreshCredentialsAction} style={{ marginTop: "1rem" }}>
+        <button
+          type="submit"
+          style={{
+            padding: "0.375rem 0.75rem",
+            borderRadius: "0.375rem",
+            border: "1px solid #d1d5db",
+            background: "white",
+            color: "#111827",
+            fontSize: "0.875rem",
+            cursor: "pointer",
+          }}
+        >
+          Refresh credentials
+        </button>
+        <span style={{ marginLeft: "0.625rem", fontSize: "0.8125rem", color: "#6b7280" }}>
+          Re-fetches the project's API keys and JWT secret via the OAuth grant. Use this if you
+          rotated keys in Supabase.
+        </span>
+      </form>
+    </div>
   );
 }
 

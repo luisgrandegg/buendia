@@ -40,4 +40,13 @@ export const env = {
   get supabaseOauthClientSecret() {
     return required("SUPABASE_OAUTH_CLIENT_SECRET");
   },
+  /**
+   * Shared secret the Vercel cron sends as `Authorization: Bearer ...`.
+   * Required by `/api/cron/*` routes; missing → cron requests are
+   * rejected. Vercel auto-injects this when configured in the project
+   * settings; locally it lives in `.env.local`.
+   */
+  get cronSecret() {
+    return required("CRON_SECRET");
+  },
 };

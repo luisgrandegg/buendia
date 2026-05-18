@@ -60,16 +60,16 @@ Modules:
 
 ### HTTP surface (`apps/web/app/api/v1/`)
 
-| Method | Path                                              | Notes                           |
-|--------|---------------------------------------------------|---------------------------------|
-| GET    | `/api/v1/me`                                      | identity + backend status       |
-| GET    | `/api/v1/apps`                                    | owned + shared                  |
-| POST   | `/api/v1/apps`                                    | body `{ html\|html_base64, name?, schema_sql? }` |
-| GET    | `/api/v1/apps/:slug`                              | detail + collaborators          |
-| DELETE | `/api/v1/apps/:slug`                              | owner-only                      |
-| POST   | `/api/v1/apps/:slug/provision`                    | re-runs schema provisioner      |
-| POST   | `/api/v1/apps/:slug/shares`                       | body `{ email, role? }`         |
-| DELETE | `/api/v1/apps/:slug/shares/:target`               | target = user uuid or email     |
+| Method | Path                                | Notes                                            |
+| ------ | ----------------------------------- | ------------------------------------------------ |
+| GET    | `/api/v1/me`                        | identity + backend status                        |
+| GET    | `/api/v1/apps`                      | owned + shared                                   |
+| POST   | `/api/v1/apps`                      | body `{ html\|html_base64, name?, schema_sql? }` |
+| GET    | `/api/v1/apps/:slug`                | detail + collaborators                           |
+| DELETE | `/api/v1/apps/:slug`                | owner-only                                       |
+| POST   | `/api/v1/apps/:slug/provision`      | re-runs schema provisioner                       |
+| POST   | `/api/v1/apps/:slug/shares`         | body `{ email, role? }`                          |
+| DELETE | `/api/v1/apps/:slug/shares/:target` | target = user uuid or email                      |
 
 Error shape: `{ error: "code", message: "human", details?: {...} }`.
 

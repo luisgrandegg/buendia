@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { decrypt, loadMasterKey } from "@buendia/db";
 import type { BuendiaAppConfig } from "@buendia/shared";
+import { appHtmlHeaders } from "@/lib/app-html-headers";
 import { mintAppJwt, type AppRole } from "@/lib/jwt-mint";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -33,7 +34,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ slu
   } = await supabase.auth.getUser();
   if (!user) {
     // Middleware should have caught this; defensive.
-    return new NextResponse(notFoundHtml(), { status: 404, headers: htmlHeaders() });
+    return new NextResponse(notFoundHtml(), { status: 404, headers: appHtmlHeaders() });
   }
 
   const { data: member } = await supabase
@@ -44,7 +45,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ slu
     .maybeSingle();
 
   if (!member) {
-    return new NextResponse(forbiddenHtml(), { status: 403, headers: htmlHeaders() });
+    return new NextResponse(forbiddenHtml(), { status: 403, headers: appHtmlHeaders() });
   }
 
   const admin = createAdminClient();
@@ -60,7 +61,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ slu
     !backend.supabase_jwt_secret_encrypted ||
     !backend.supabase_publishable_key_encrypted
   ) {
-    return new NextResponse(notReadyHtml(), { status: 502, headers: htmlHeaders() });
+    return new NextResponse(notReadyHtml(), { status: 502, headers: appHtmlHeaders() });
   }
 
   let jwtSecret: string;
@@ -74,7 +75,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ slu
     );
   } catch (err) {
     console.error("[buendia] failed to decrypt owner credentials:", err);
-    return new NextResponse(notReadyHtml(), { status: 500, headers: htmlHeaders() });
+    return new NextResponse(notReadyHtml(), { status: 500, headers: appHtmlHeaders() });
   }
 
   const { jwt, exp } = mintAppJwt({
@@ -91,7 +92,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ slu
     .download(member.html_storage_path);
   if (downloadError || !blob) {
     console.error("[buendia] html download failed:", downloadError);
-    return new NextResponse(notReadyHtml(), { status: 502, headers: htmlHeaders() });
+    return new NextResponse(notReadyHtml(), { status: 502, headers: appHtmlHeaders() });
   }
   const rawHtml = await blob.text();
 
@@ -120,12 +121,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ slu
 
   return new NextResponse(html, {
     status: 200,
-    headers: {
-      ...htmlHeaders(),
-      // Each render carries a fresh, short-lived JWT — no caching layer
-      // should hold onto this output.
-      "Cache-Control": "no-store",
-    },
+    // Each render carries a fresh, short-lived JWT — no caching layer
+    // should hold onto this output.
+    headers: appHtmlHeaders({ "Cache-Control": "no-store" }),
   });
 }
 
@@ -142,10 +140,6 @@ function injectAppConfig(html: string, config: BuendiaAppConfig): string {
     return html.slice(0, match.index) + tag + html.slice(match.index);
   }
   return tag + html;
-}
-
-function htmlHeaders(): Record<string, string> {
-  return { "Content-Type": "text/html; charset=utf-8" };
 }
 
 function bufferFromBytea(value: unknown): Buffer {

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { hashInvitationToken } from "@/lib/invitations";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -26,10 +27,15 @@ export async function GET(request: Request) {
   }
 
   const admin = createAdminClient();
+  // Look up by SHA-256 of the plaintext — the DB never stores the
+  // plaintext (audit §L3, migration 0014). The unique index on
+  // token_hash makes this an O(1) lookup; we never branch on per-byte
+  // equality, so no constant-time-compare gymnastics needed here.
+  const tokenHash = `\\x${hashInvitationToken(token).toString("hex")}`;
   const { data: invitation } = await admin
     .from("invitations")
     .select("id, app_id, email, role, expires_at, app:apps!invitations_app_id_fkey(slug)")
-    .eq("token", token)
+    .eq("token_hash", tokenHash)
     .maybeSingle();
 
   if (!invitation) {

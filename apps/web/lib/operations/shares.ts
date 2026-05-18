@@ -1,7 +1,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { recordAudit } from "@buendia/db";
 import { Errors, fail, ok, type OpResult } from "@/lib/api-errors";
-import { generateInvitationToken, invitationExpiry, invitationUrl } from "@/lib/invitations";
+import {
+  generateInvitationToken,
+  hashInvitationToken,
+  invitationExpiry,
+  invitationUrl,
+} from "@/lib/invitations";
 
 /**
  * Sharing operations. Both the dashboard's `/apps/[slug]` form actions
@@ -138,7 +143,10 @@ export async function addCollaborator(
   }
 
   // Email doesn't belong to a Buendia account — pending invitation path.
+  // The plaintext token only ever lives in this scope and in the URL we
+  // return to the caller. The DB sees only its SHA-256.
   const token = generateInvitationToken();
+  const tokenHash = `\\x${hashInvitationToken(token).toString("hex")}`;
   const expiresAt = invitationExpiry().toISOString();
 
   const { data: invRow, error: invError } = await supabase
@@ -149,12 +157,12 @@ export async function addCollaborator(
         email,
         role,
         invited_by: userId,
-        token,
+        token_hash: tokenHash,
         expires_at: expiresAt,
       },
       { onConflict: "app_id,email" },
     )
-    .select("id, email, role, expires_at, token")
+    .select("id, email, role, expires_at")
     .single();
   if (invError || !invRow) {
     console.error("[buendia] invitations upsert failed:", invError);
@@ -174,7 +182,7 @@ export async function addCollaborator(
     email: invRow.email,
     role: invRow.role as "viewer" | "editor",
     expires_at: invRow.expires_at,
-    url: invitationUrl(input.origin, invRow.token),
+    url: invitationUrl(input.origin, token),
   });
 }
 

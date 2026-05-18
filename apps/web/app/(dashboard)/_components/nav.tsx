@@ -2,31 +2,35 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { colors, motion, radii, space, typography } from "@/lib/ui";
 
 const items = [
-  { href: "/", label: "My apps", match: (p: string) => p === "/" },
+  { href: "/", label: "Apps", match: (p: string) => p === "/" },
   { href: "/shared", label: "Shared with me", match: (p: string) => p.startsWith("/shared") },
   { href: "/settings", label: "Settings", match: (p: string) => p.startsWith("/settings") },
 ];
 
 const base = {
   textDecoration: "none",
-  color: "inherit",
-  padding: "0.5rem 0.75rem",
-  borderRadius: "0.375rem",
-  fontSize: "0.9375rem",
+  color: colors.textMuted,
+  padding: `${space[2]} ${space[3]}`,
+  borderRadius: radii.md,
+  fontFamily: typography.fontSans,
+  ...typography.size.md,
+  fontWeight: typography.weight.medium,
+  transition: `background ${motion.fast}, color ${motion.fast}`,
 };
 
 const active = {
   ...base,
-  background: "#111827",
-  color: "white",
+  background: colors.bgSubtle,
+  color: colors.text,
 };
 
 export function Nav() {
   const pathname = usePathname();
   return (
-    <nav style={{ display: "flex", gap: "0.5rem" }}>
+    <nav style={{ display: "flex", gap: space[1] }}>
       {items.map((item) => {
         const isActive = item.match(pathname);
         return (

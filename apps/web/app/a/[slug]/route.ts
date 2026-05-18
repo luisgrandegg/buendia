@@ -183,17 +183,62 @@ function basicHtml(title: string, body: string): string {
   <head>
     <meta charset="utf-8" />
     <title>${title} · Buendia</title>
+    <link rel="preconnect" href="https://rsms.me/" />
+    <link rel="stylesheet" href="https://rsms.me/inter/inter.css" />
     <style>
-      body { font-family: system-ui, -apple-system, sans-serif; padding: 3rem 1.5rem; max-width: 32rem; margin: 0 auto; color: #111827; }
-      h1 { font-size: 1.5rem; margin: 0 0 0.75rem 0; }
-      p { color: #4b5563; }
-      a { color: inherit; }
+      :root { font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+      *, *::before, *::after { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; }
+      body {
+        min-height: 100vh;
+        background: #f8fafc;
+        color: #0f172a;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1.5rem;
+        -webkit-font-smoothing: antialiased;
+      }
+      .card {
+        max-width: 28rem;
+        width: 100%;
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 0.75rem;
+        padding: 2rem 2.25rem;
+        box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06), 0 1px 2px rgba(15, 23, 42, 0.04);
+      }
+      .eyebrow {
+        font-size: 0.75rem;
+        font-weight: 500;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #64748b;
+        margin-bottom: 0.5rem;
+      }
+      h1 { font-size: 1.5rem; margin: 0 0 0.75rem 0; letter-spacing: -0.015em; font-weight: 600; }
+      p { color: #475569; line-height: 1.6; margin: 0 0 1rem 0; }
+      a {
+        display: inline-block;
+        margin-top: 0.5rem;
+        padding: 0.5rem 1rem;
+        background: #0f172a;
+        color: #ffffff;
+        border-radius: 0.375rem;
+        text-decoration: none;
+        font-size: 0.9375rem;
+        font-weight: 500;
+      }
+      a:hover { background: #1e293b; }
     </style>
   </head>
   <body>
-    <h1>${title}</h1>
-    <p>${body}</p>
-    <p><a href="/">Back to dashboard</a></p>
+    <main class="card">
+      <div class="eyebrow">Buendia</div>
+      <h1>${title}</h1>
+      <p>${body}</p>
+      <a href="/">← Back to dashboard</a>
+    </main>
   </body>
 </html>`;
 }

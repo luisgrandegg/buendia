@@ -10,6 +10,7 @@ two-digit prefix that loosely groups by MVP phase:
 - `4x` — Phase 4, project-tracker canary (MVP acceptance test)
 - `5x` — Phase 5, polish
 - `6x` — Cross-cutting (audit, OAuth health, key rotation)
+- `7x` — Phase 7, Claude / MCP integration (post-MVP, see ADR queue)
 
 Each ticket states its phase, dependencies, constitution references, scope,
 out-of-scope, and acceptance criteria. Keep them tight — these are tickets,

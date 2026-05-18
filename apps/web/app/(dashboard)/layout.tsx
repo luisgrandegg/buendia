@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { PRODUCT_NAME } from "@buendia/shared";
 import { createClient } from "@/lib/supabase/server";
+import { colors, space, typography, widths } from "@/lib/ui";
 import { AccountMenu } from "./_components/account-menu";
 import { Nav } from "./_components/nav";
 
@@ -17,41 +18,54 @@ export default async function DashboardLayout({ children }: { children: ReactNod
   }
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        fontFamily: "system-ui, -apple-system, sans-serif",
-        color: "#111827",
-      }}
-    >
+    <div style={{ minHeight: "100vh", background: colors.bgMuted }}>
       <header
         style={{
-          borderBottom: "1px solid #e5e7eb",
-          padding: "0.75rem 1.5rem",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: "1.5rem",
+          background: colors.bg,
+          borderBottom: `1px solid ${colors.border}`,
+          padding: `${space[3]} ${space[6]}`,
+          position: "sticky",
+          top: 0,
+          zIndex: 10,
+          backdropFilter: "saturate(180%) blur(8px)",
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: "1.5rem" }}>
-          <Link
-            href="/"
-            style={{
-              fontSize: "1.125rem",
-              fontWeight: 600,
-              textDecoration: "none",
-              color: "inherit",
-            }}
-          >
-            {PRODUCT_NAME}
-          </Link>
-          <Nav />
+        <div
+          style={{
+            maxWidth: widths.app,
+            margin: "0 auto",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: space[6],
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: space[6] }}>
+            <Link
+              href="/"
+              style={{
+                ...typography.size.lg,
+                fontWeight: typography.weight.semibold,
+                letterSpacing: "-0.015em",
+                textDecoration: "none",
+                color: colors.text,
+              }}
+            >
+              {PRODUCT_NAME}
+            </Link>
+            <Nav />
+          </div>
+          <AccountMenu email={user.email ?? ""} />
         </div>
-        <AccountMenu email={user.email ?? ""} />
       </header>
 
-      <main style={{ padding: "2rem 1.5rem", maxWidth: "56rem", margin: "0 auto" }}>
+      <main
+        style={{
+          maxWidth: widths.app,
+          margin: "0 auto",
+          padding: `${space[10]} ${space[6]} ${space[16]}`,
+        }}
+      >
         {children}
       </main>
     </div>

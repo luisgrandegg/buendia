@@ -10,65 +10,80 @@ import { invitationUrl } from "@/lib/invitations";
 import { originFromHeaders } from "@/lib/oauth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  CodeBlock,
+  Heading,
+  Input,
+  PageHeader,
+  Row,
+  Stack,
+  Text,
+  colors,
+  motion,
+  radii,
+  space,
+  typography,
+} from "@/lib/ui";
 
 interface PageProps {
   params: Promise<{ slug: string }>;
   searchParams: Promise<{ share?: string; provision_schema?: string; rename?: string }>;
 }
 
-const renameMessages: Record<string, { tone: "ok" | "warn"; text: string }> = {
-  ok: { tone: "ok", text: "App renamed." },
-  unauthenticated: { tone: "warn", text: "Sign in and try again." },
-  not_found: { tone: "warn", text: "Couldn't find that app." },
-  not_owner: { tone: "warn", text: "Only the owner can rename this app." },
-  empty: { tone: "warn", text: "Enter a name." },
-  write_failed: { tone: "warn", text: "Couldn't save the new name." },
+const renameMessages: Record<string, { tone: "success" | "warning"; text: string }> = {
+  ok: { tone: "success", text: "App renamed." },
+  unauthenticated: { tone: "warning", text: "Sign in and try again." },
+  not_found: { tone: "warning", text: "Couldn't find that app." },
+  not_owner: { tone: "warning", text: "Only the owner can rename this app." },
+  empty: { tone: "warning", text: "Enter a name." },
+  write_failed: { tone: "warning", text: "Couldn't save the new name." },
 };
 
-const shareMessages: Record<string, { tone: "ok" | "warn"; text: string }> = {
-  ok_invited: { tone: "ok", text: "Collaborator added." },
+const shareMessages: Record<string, { tone: "success" | "warning"; text: string }> = {
+  ok_invited: { tone: "success", text: "Collaborator added." },
   ok_invited_email: {
-    tone: "ok",
+    tone: "success",
     text: "Invitation created. Copy the link below to share it.",
   },
-  ok_role_changed: { tone: "ok", text: "Role updated." },
-  ok_removed: { tone: "ok", text: "Collaborator removed." },
-  ok_invitation_removed: { tone: "ok", text: "Invitation cancelled." },
-  unauthenticated: { tone: "warn", text: "Sign in and try again." },
-  missing_email: { tone: "warn", text: "Enter an email to invite." },
+  ok_role_changed: { tone: "success", text: "Role updated." },
+  ok_removed: { tone: "success", text: "Collaborator removed." },
+  ok_invitation_removed: { tone: "success", text: "Invitation cancelled." },
+  unauthenticated: { tone: "warning", text: "Sign in and try again." },
+  missing_email: { tone: "warning", text: "Enter an email to invite." },
   self_invite: {
-    tone: "warn",
+    tone: "warning",
     text: "You're the owner of this app — there's nothing to invite yourself to.",
   },
-  not_owner: { tone: "warn", text: "Only the owner can manage sharing." },
-  not_found: { tone: "warn", text: "Couldn't find that share." },
-  write_failed: { tone: "warn", text: "Couldn't save the change. Please try again." },
+  not_owner: { tone: "warning", text: "Only the owner can manage sharing." },
+  not_found: { tone: "warning", text: "Couldn't find that share." },
+  write_failed: { tone: "warning", text: "Couldn't save the change. Please try again." },
 };
 
-const provisionMessages: Record<string, { tone: "ok" | "warn"; text: string }> = {
-  ok: { tone: "ok", text: "Schema provisioned." },
-  unauthenticated: { tone: "warn", text: "Sign in and try again." },
-  not_found: { tone: "warn", text: "Couldn't find that app." },
+const provisionMessages: Record<string, { tone: "success" | "warning"; text: string }> = {
+  ok: { tone: "success", text: "Schema provisioned." },
+  unauthenticated: { tone: "warning", text: "Sign in and try again." },
+  not_found: { tone: "warning", text: "Couldn't find that app." },
   not_connected: {
-    tone: "warn",
+    tone: "warning",
     text: "Provision a Supabase project in Settings before running schemas.",
   },
   no_schema: {
-    tone: "warn",
+    tone: "warning",
     text: "This app has no schema.sql. Upload a new version with one to provision.",
   },
   schema_invalid: {
-    tone: "warn",
-    text: "Your schema.sql contains a forbidden statement (RLS disable, GRANT, role manipulation, etc.). Fix and re-upload.",
+    tone: "warning",
+    text: "Your schema.sql contains a forbidden statement. Fix and re-upload.",
   },
   oauth_refresh_failed: {
-    tone: "warn",
+    tone: "warning",
     text: "Supabase refused the stored credentials. Reconnect from Settings.",
   },
-  sql_failed: {
-    tone: "warn",
-    text: "Supabase rejected the schema. Check the server logs for the SQL error.",
-  },
+  sql_failed: { tone: "warning", text: "Supabase rejected the schema." },
 };
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
@@ -93,16 +108,10 @@ export default async function AppDetailPage({ params, searchParams }: PageProps)
     )
     .eq("slug", slug)
     .maybeSingle();
-  if (!app) {
-    // Could be a non-member trying to access; could be truly missing. RLS
-    // makes them indistinguishable on purpose.
-    notFound();
-  }
+  if (!app) notFound();
 
   const isOwner = app.owner_id === user.id;
 
-  // Shares — only visible to the owner via RLS. Hydrate with emails via
-  // the admin client so the page can render "alice@example.com — Editor".
   let collaborators: { user_id: string; email: string; role: string; granted_at: string }[] = [];
   if (isOwner) {
     const admin = createAdminClient();
@@ -121,7 +130,6 @@ export default async function AppDetailPage({ params, searchParams }: PageProps)
       })) ?? [];
   }
 
-  // Pending invitations — owner only.
   let pendingInvitations: {
     id: string;
     email: string;
@@ -149,285 +157,352 @@ export default async function AppDetailPage({ params, searchParams }: PageProps)
     undefined;
 
   return (
-    <div>
-      <header style={{ marginBottom: "1.5rem" }}>
-        <h1 style={{ fontSize: "1.5rem", margin: 0 }}>{app.name}</h1>
-        <p style={{ color: "#6b7280", margin: "0.25rem 0 0 0", fontSize: "0.9375rem" }}>
-          slug: <code>{app.slug}</code> · v{app.current_version} · created{" "}
-          {new Date(app.created_at).toLocaleString()}
-        </p>
-      </header>
-
-      {banner ? (
-        <div
-          role="status"
-          style={{
-            padding: "0.75rem 1rem",
-            marginBottom: "1.5rem",
-            borderRadius: "0.375rem",
-            border: `1px solid ${banner.tone === "ok" ? "#bbf7d0" : "#fecaca"}`,
-            background: banner.tone === "ok" ? "#f0fdf4" : "#fef2f2",
-            color: banner.tone === "ok" ? "#166534" : "#991b1b",
-            fontSize: "0.9375rem",
-          }}
-        >
-          {banner.text}
-        </div>
-      ) : null}
-
-      <section style={{ marginBottom: "2rem" }}>
-        <h2 style={{ fontSize: "1rem", marginBottom: "0.75rem" }}>App</h2>
-        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
-          <a href={`/a/${app.slug}`} target="_blank" rel="noreferrer" style={primaryButtonStyle}>
-            Open ↗
-          </a>
-          {isOwner ? (
-            <>
-              <form action={provisionSchemaAction}>
-                <input type="hidden" name="app_id" value={app.id} />
-                <button type="submit" style={secondaryButtonStyle}>
-                  {app.schema_provisioned_at ? "Re-provision schema" : "Provision schema"}
-                </button>
-              </form>
-              <a
-                href={`/apps/${app.slug}/export`}
-                style={{ ...secondaryButtonStyle, textDecoration: "none", display: "inline-block" }}
-              >
-                Export bundle
-              </a>
-            </>
-          ) : null}
-        </div>
-        <p style={{ color: "#6b7280", margin: "0.5rem 0 0 0", fontSize: "0.8125rem" }}>
-          {app.schema_provisioned_at
-            ? `schema provisioned ${new Date(app.schema_provisioned_at).toLocaleString()}`
-            : "schema not yet provisioned"}
-        </p>
-      </section>
-
-      {isOwner ? (
-        <section>
-          <h2 style={{ fontSize: "1rem", marginBottom: "0.75rem" }}>Collaborators</h2>
-
-          <ul
-            style={{
-              listStyle: "none",
-              margin: "0 0 1rem 0",
-              padding: 0,
-              fontSize: "0.9375rem",
-            }}
-          >
-            <li style={memberRowStyle}>
-              <div>
-                <strong>{user.email}</strong> · you · owner
-              </div>
-            </li>
-            {collaborators.map((c) => (
-              <li key={c.user_id} style={memberRowStyle}>
-                <div>
-                  <strong>{c.email}</strong> · {c.role} · since{" "}
-                  {new Date(c.granted_at).toLocaleDateString()}
-                </div>
-                <form action={removeCollaboratorAction}>
-                  <input type="hidden" name="slug" value={app.slug} />
-                  <input type="hidden" name="user_id" value={c.user_id} />
-                  <button type="submit" style={dangerButtonStyle}>
-                    Remove
-                  </button>
-                </form>
-              </li>
-            ))}
-          </ul>
-
-          {pendingInvitations.length > 0 ? (
-            <div style={{ margin: "1rem 0" }}>
-              <h3
-                style={{
-                  fontSize: "0.875rem",
-                  color: "#6b7280",
-                  margin: "0 0 0.5rem 0",
-                  fontWeight: 500,
-                }}
-              >
-                Pending invitations
-              </h3>
-              <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
-                {pendingInvitations.map((inv) => (
-                  <li
-                    key={inv.id}
-                    style={{
-                      padding: "0.625rem 0.875rem",
-                      border: "1px solid #fde68a",
-                      background: "#fffbeb",
-                      borderRadius: "0.375rem",
-                      marginBottom: "0.375rem",
-                      fontSize: "0.9375rem",
-                    }}
-                  >
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        gap: "0.5rem",
-                      }}
-                    >
-                      <div>
-                        <strong>{inv.email}</strong> · {inv.role} · expires{" "}
-                        {new Date(inv.expires_at).toLocaleDateString()}
-                      </div>
-                      <form action={cancelInvitationAction}>
-                        <input type="hidden" name="slug" value={app.slug} />
-                        <input type="hidden" name="invitation_id" value={inv.id} />
-                        <button type="submit" style={dangerButtonStyle}>
-                          Cancel
-                        </button>
-                      </form>
-                    </div>
-                    <div
-                      style={{
-                        marginTop: "0.5rem",
-                        fontSize: "0.8125rem",
-                        color: "#78350f",
-                        fontFamily: "ui-monospace, monospace",
-                        wordBreak: "break-all",
-                        userSelect: "all",
-                      }}
-                    >
-                      {invitationUrl(pendingOrigin, inv.token)}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-
-          <form action={inviteCollaboratorAction} style={{ display: "flex", gap: "0.5rem" }}>
-            <input type="hidden" name="slug" value={app.slug} />
-            <input
-              name="email"
-              type="email"
-              placeholder="collaborator@example.com"
-              required
-              style={{ ...inputStyle, flex: 1 }}
-            />
-            <select name="role" defaultValue="viewer" style={inputStyle}>
-              <option value="viewer">Viewer</option>
-              <option value="editor">Editor</option>
-            </select>
-            <button type="submit" style={primaryButtonStyle}>
-              Invite
-            </button>
-          </form>
-          <p style={{ color: "#6b7280", margin: "0.5rem 0 0 0", fontSize: "0.8125rem" }}>
-            Invitees with a Buendia account get access immediately. Otherwise, an invite link
-            appears under <em>Pending invitations</em>; copy and share it. Once they sign up via the
-            link, they show up in the collaborators list.
-          </p>
-        </section>
-      ) : null}
-
-      {isOwner ? (
-        <section style={{ marginTop: "2rem" }}>
-          <h2 style={{ fontSize: "1rem", marginBottom: "0.75rem" }}>Settings</h2>
-
-          <form
-            action={renameAppAction}
-            style={{ display: "flex", gap: "0.5rem", marginBottom: "1.5rem", alignItems: "center" }}
-          >
-            <input type="hidden" name="slug" value={app.slug} />
-            <input
-              name="name"
-              type="text"
-              defaultValue={app.name}
-              required
-              style={{ ...inputStyle, flex: 1 }}
-            />
-            <button type="submit" style={secondaryButtonStyle}>
-              Rename
-            </button>
-          </form>
-
-          <details
-            style={{
-              padding: "0.875rem 1rem",
-              border: "1px solid #fecaca",
-              borderRadius: "0.375rem",
-              background: "#fef2f2",
-            }}
-          >
-            <summary
+    <Stack gap={8}>
+      <PageHeader
+        eyebrow={
+          <Row gap={2}>
+            <span>Apps</span>
+            <span>›</span>
+            <CodeBlock inline>{app.slug}</CodeBlock>
+          </Row>
+        }
+        title={app.name}
+        description={
+          <Row gap={2} align="center">
+            <Text size="md" tone="muted">
+              v{app.current_version} · created {new Date(app.created_at).toLocaleDateString()}
+            </Text>
+            {app.schema_provisioned_at ? (
+              <Badge tone="success">schema provisioned</Badge>
+            ) : (
+              <Badge tone="warning">schema pending</Badge>
+            )}
+          </Row>
+        }
+        actions={
+          <Row gap={2}>
+            <a
+              href={`/a/${app.slug}`}
+              target="_blank"
+              rel="noreferrer"
               style={{
-                cursor: "pointer",
-                fontSize: "0.875rem",
-                color: "#991b1b",
-                fontWeight: 500,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: space[1],
+                padding: `${space[2]} ${space[4]}`,
+                borderRadius: radii.md,
+                border: `1px solid ${colors.bgInverse}`,
+                background: colors.bgInverse,
+                color: colors.textInverse,
+                ...typography.size.base,
+                fontWeight: typography.weight.medium,
+                textDecoration: "none",
               }}
             >
-              Delete this app
-            </summary>
-            <p style={{ marginTop: "0.5rem", fontSize: "0.875rem", color: "#7f1d1d" }}>
-              Drops the <code>{app.schema_name}</code> schema in your Supabase project, removes the
-              stored HTML, deletes the app record + all shares + version history. Can't be undone.
-            </p>
-            <form action={deleteAppAction} style={{ marginTop: "0.75rem" }}>
-              <input type="hidden" name="slug" value={app.slug} />
-              <button type="submit" style={dangerButtonStyle}>
-                Delete app permanently
-              </button>
-            </form>
-          </details>
-        </section>
+              Open ↗
+            </a>
+          </Row>
+        }
+      />
+
+      {banner ? <Alert tone={banner.tone}>{banner.text}</Alert> : null}
+
+      {isOwner ? (
+        <Stack gap={4}>
+          <Heading level={2}>Schema</Heading>
+          <Card>
+            <Row gap={4} justify="space-between" align="center">
+              <Stack gap={1}>
+                <Text>
+                  {app.schema_provisioned_at
+                    ? `Last provisioned ${new Date(app.schema_provisioned_at).toLocaleString()}`
+                    : "Schema not yet provisioned."}
+                </Text>
+                <Text size="sm" tone="muted">
+                  Applies the stored <CodeBlock inline>schema.sql</CodeBlock> to{" "}
+                  <CodeBlock inline>{app.schema_name}</CodeBlock> in your Supabase project.
+                </Text>
+              </Stack>
+              <Row gap={2}>
+                <form action={provisionSchemaAction}>
+                  <input type="hidden" name="app_id" value={app.id} />
+                  <Button type="submit">
+                    {app.schema_provisioned_at ? "Re-provision" : "Provision"}
+                  </Button>
+                </form>
+                <a
+                  href={`/apps/${app.slug}/export`}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    padding: `${space[2]} ${space[4]}`,
+                    borderRadius: radii.md,
+                    border: `1px solid ${colors.borderStrong}`,
+                    background: colors.bg,
+                    color: colors.text,
+                    ...typography.size.base,
+                    fontWeight: typography.weight.medium,
+                    textDecoration: "none",
+                  }}
+                >
+                  Export bundle
+                </a>
+              </Row>
+            </Row>
+          </Card>
+        </Stack>
       ) : null}
-    </div>
+
+      {isOwner ? (
+        <Stack gap={4}>
+          <Heading level={2}>Collaborators</Heading>
+          <Card padding="none">
+            <MemberRow
+              avatar={(user.email ?? "?")[0]?.toUpperCase() ?? "?"}
+              email={user.email ?? ""}
+              suffix={
+                <Row gap={2} align="center">
+                  <Badge tone="accent">owner</Badge>
+                  <Text size="sm" tone="muted">
+                    you
+                  </Text>
+                </Row>
+              }
+              isLast={collaborators.length === 0}
+            />
+            {collaborators.map((c, idx) => (
+              <MemberRow
+                key={c.user_id}
+                avatar={c.email[0]?.toUpperCase() ?? "?"}
+                email={c.email}
+                suffix={
+                  <Row gap={2} align="center">
+                    <Badge tone={c.role === "editor" ? "accent" : "neutral"}>{c.role}</Badge>
+                    <Text size="sm" tone="muted">
+                      since {new Date(c.granted_at).toLocaleDateString()}
+                    </Text>
+                  </Row>
+                }
+                actions={
+                  <form action={removeCollaboratorAction}>
+                    <input type="hidden" name="slug" value={app.slug} />
+                    <input type="hidden" name="user_id" value={c.user_id} />
+                    <Button type="submit" size="sm" variant="danger">
+                      Remove
+                    </Button>
+                  </form>
+                }
+                isLast={idx === collaborators.length - 1}
+              />
+            ))}
+          </Card>
+
+          {pendingInvitations.length > 0 ? (
+            <Stack gap={3}>
+              <Text size="md" tone="muted" style={{ fontWeight: typography.weight.medium }}>
+                Pending invitations
+              </Text>
+              <Stack gap={2}>
+                {pendingInvitations.map((inv) => (
+                  <Card
+                    key={inv.id}
+                    padding="compact"
+                    style={{ background: colors.warningBg, borderColor: colors.warningBorder }}
+                  >
+                    <Stack gap={3}>
+                      <Row gap={3} justify="space-between" align="center">
+                        <Row gap={2} align="center">
+                          <Text style={{ fontWeight: typography.weight.medium }}>{inv.email}</Text>
+                          <Badge tone="warning">{inv.role}</Badge>
+                          <Text size="sm" tone="muted">
+                            expires {new Date(inv.expires_at).toLocaleDateString()}
+                          </Text>
+                        </Row>
+                        <form action={cancelInvitationAction}>
+                          <input type="hidden" name="slug" value={app.slug} />
+                          <input type="hidden" name="invitation_id" value={inv.id} />
+                          <Button type="submit" size="sm" variant="danger">
+                            Cancel
+                          </Button>
+                        </form>
+                      </Row>
+                      <CodeBlock
+                        style={{
+                          fontSize: "0.8125rem",
+                          padding: `${space[2]} ${space[3]}`,
+                          background: colors.bg,
+                          wordBreak: "break-all" as const,
+                          whiteSpace: "pre-wrap" as const,
+                          userSelect: "all" as const,
+                        }}
+                      >
+                        {invitationUrl(pendingOrigin, inv.token)}
+                      </CodeBlock>
+                    </Stack>
+                  </Card>
+                ))}
+              </Stack>
+            </Stack>
+          ) : null}
+
+          <Card>
+            <Stack gap={3}>
+              <Text size="md" style={{ fontWeight: typography.weight.medium }}>
+                Invite by email
+              </Text>
+              <form action={inviteCollaboratorAction}>
+                <Row gap={2} align="flex-end" wrap={false}>
+                  <input type="hidden" name="slug" value={app.slug} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <input
+                      name="email"
+                      type="email"
+                      placeholder="collaborator@example.com"
+                      required
+                      style={{
+                        width: "100%",
+                        padding: `${space[2]} ${space[3]}`,
+                        borderRadius: radii.md,
+                        border: `1px solid ${colors.borderStrong}`,
+                        background: colors.bg,
+                        color: colors.text,
+                        fontFamily: typography.fontSans,
+                        ...typography.size.base,
+                        transition: `border-color ${motion.fast}, box-shadow ${motion.fast}`,
+                      }}
+                    />
+                  </div>
+                  <select
+                    name="role"
+                    defaultValue="viewer"
+                    style={{
+                      padding: `${space[2]} ${space[3]}`,
+                      borderRadius: radii.md,
+                      border: `1px solid ${colors.borderStrong}`,
+                      background: colors.bg,
+                      color: colors.text,
+                      fontFamily: typography.fontSans,
+                      ...typography.size.base,
+                    }}
+                  >
+                    <option value="viewer">Viewer</option>
+                    <option value="editor">Editor</option>
+                  </select>
+                  <Button type="submit" variant="primary">
+                    Invite
+                  </Button>
+                </Row>
+              </form>
+              <Text size="sm" tone="muted">
+                Invitees with a Buendia account get access immediately. Otherwise, an invite link
+                appears under <em>Pending invitations</em>; copy and share it.
+              </Text>
+            </Stack>
+          </Card>
+        </Stack>
+      ) : null}
+
+      {isOwner ? (
+        <Stack gap={4}>
+          <Heading level={2}>Settings</Heading>
+          <Card>
+            <Stack gap={4}>
+              <Text size="md" style={{ fontWeight: typography.weight.medium }}>
+                Rename app
+              </Text>
+              <form action={renameAppAction}>
+                <Row gap={2} align="flex-end" wrap={false}>
+                  <input type="hidden" name="slug" value={app.slug} />
+                  <div style={{ flex: 1 }}>
+                    <Input name="name" type="text" defaultValue={app.name} required />
+                  </div>
+                  <Button type="submit">Rename</Button>
+                </Row>
+              </form>
+            </Stack>
+          </Card>
+
+          <Card style={{ borderColor: colors.dangerBorder, background: colors.dangerBg }}>
+            <details>
+              <summary
+                style={{
+                  cursor: "pointer",
+                  color: colors.danger,
+                  fontWeight: typography.weight.semibold,
+                  ...typography.size.base,
+                }}
+              >
+                Delete this app
+              </summary>
+              <Stack gap={3} style={{ marginTop: space[3] }}>
+                <Text size="md" style={{ color: "#7f1d1d", lineHeight: 1.6 }}>
+                  Drops the <CodeBlock inline>{app.schema_name}</CodeBlock> schema in your Supabase
+                  project, removes the stored HTML, deletes the app record + all shares + version
+                  history. Can't be undone.
+                </Text>
+                <form action={deleteAppAction}>
+                  <input type="hidden" name="slug" value={app.slug} />
+                  <Button type="submit" variant="danger">
+                    Delete app permanently
+                  </Button>
+                </form>
+              </Stack>
+            </details>
+          </Card>
+        </Stack>
+      ) : null}
+    </Stack>
   );
 }
 
-const memberRowStyle = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  padding: "0.625rem 0.875rem",
-  border: "1px solid #e5e7eb",
-  borderRadius: "0.375rem",
-  marginBottom: "0.375rem",
-};
-
-const inputStyle = {
-  padding: "0.5rem 0.75rem",
-  borderRadius: "0.375rem",
-  border: "1px solid #d1d5db",
-  fontSize: "0.9375rem",
-};
-
-const primaryButtonStyle = {
-  padding: "0.5rem 1rem",
-  borderRadius: "0.375rem",
-  border: "1px solid #111827",
-  background: "#111827",
-  color: "white",
-  fontSize: "0.9375rem",
-  cursor: "pointer",
-  textDecoration: "none",
-  display: "inline-block",
-} as const;
-
-const secondaryButtonStyle = {
-  padding: "0.5rem 0.75rem",
-  borderRadius: "0.375rem",
-  border: "1px solid #d1d5db",
-  background: "white",
-  color: "#111827",
-  fontSize: "0.9375rem",
-  cursor: "pointer",
-} as const;
-
-const dangerButtonStyle = {
-  padding: "0.3125rem 0.625rem",
-  borderRadius: "0.375rem",
-  border: "1px solid #fecaca",
-  background: "white",
-  color: "#b91c1c",
-  fontSize: "0.8125rem",
-  cursor: "pointer",
-} as const;
+function MemberRow({
+  avatar,
+  email,
+  suffix,
+  actions,
+  isLast,
+}: {
+  avatar: string;
+  email: string;
+  suffix?: React.ReactNode;
+  actions?: React.ReactNode;
+  isLast: boolean;
+}) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: space[4],
+        padding: `${space[3]} ${space[5]}`,
+        borderBottom: isLast ? "none" : `1px solid ${colors.border}`,
+      }}
+    >
+      <Row gap={3} align="center" wrap={false} style={{ flex: 1, minWidth: 0 }}>
+        <div
+          style={{
+            width: "2rem",
+            height: "2rem",
+            borderRadius: radii.pill,
+            background: colors.bgSubtle,
+            color: colors.textMuted,
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexShrink: 0,
+            ...typography.size.sm,
+            fontWeight: typography.weight.semibold,
+          }}
+        >
+          {avatar}
+        </div>
+        <div style={{ minWidth: 0 }}>
+          <Text style={{ fontWeight: typography.weight.medium, color: colors.text }}>{email}</Text>
+          {suffix ? <div style={{ marginTop: space[1] }}>{suffix}</div> : null}
+        </div>
+      </Row>
+      {actions}
+    </div>
+  );
+}

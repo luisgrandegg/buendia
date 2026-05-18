@@ -1,5 +1,19 @@
 import Link from "next/link";
 import { PRODUCT_NAME, PRODUCT_TAGLINE } from "@buendia/shared";
+import {
+  Badge,
+  Card,
+  Heading,
+  LinkButton,
+  Row,
+  Stack,
+  Text,
+  colors,
+  radii,
+  space,
+  typography,
+  widths,
+} from "@/lib/ui";
 
 export const metadata = {
   title: `${PRODUCT_NAME} — host AI-generated single-file HTML apps`,
@@ -51,224 +65,246 @@ const PRINCIPLES: { number: number; name: string; one_liner: string }[] = [
 
 export default function LandingPage() {
   return (
-    <main
-      style={{
-        minHeight: "100vh",
-        fontFamily: "system-ui, -apple-system, sans-serif",
-        color: "#111827",
-        background: "white",
-      }}
-    >
+    <main style={{ minHeight: "100vh", background: colors.bg, color: colors.text }}>
       <header
         style={{
-          padding: "1.25rem 1.5rem",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          maxWidth: "64rem",
-          margin: "0 auto",
+          padding: `${space[4]} ${space[6]}`,
+          borderBottom: `1px solid ${colors.border}`,
+          background: colors.bg,
+          position: "sticky",
+          top: 0,
+          backdropFilter: "saturate(180%) blur(8px)",
+          zIndex: 10,
         }}
       >
-        <strong style={{ fontSize: "1.125rem" }}>{PRODUCT_NAME}</strong>
-        <nav style={{ display: "flex", gap: "0.75rem" }}>
-          <Link href="/signin" style={textLinkStyle}>
-            Sign in
+        <div
+          style={{
+            maxWidth: widths.hero,
+            margin: "0 auto",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <Link
+            href="/landing"
+            style={{
+              ...typography.size.lg,
+              fontWeight: typography.weight.semibold,
+              letterSpacing: "-0.015em",
+              textDecoration: "none",
+              color: colors.text,
+            }}
+          >
+            {PRODUCT_NAME}
           </Link>
-          <Link href="/signup" style={primaryLinkStyle}>
-            Sign up
-          </Link>
-        </nav>
+          <Row gap={2}>
+            <LinkButton href="/signin" variant="ghost" size="sm">
+              Sign in
+            </LinkButton>
+            <LinkButton href="/signup" variant="primary" size="sm">
+              Sign up
+            </LinkButton>
+          </Row>
+        </div>
       </header>
 
       <section
         style={{
-          padding: "3rem 1.5rem 4rem 1.5rem",
-          maxWidth: "44rem",
+          padding: `${space[20]} ${space[6]} ${space[16]}`,
+          maxWidth: widths.prose,
           margin: "0 auto",
           textAlign: "center",
         }}
       >
-        <h1 style={{ fontSize: "2.25rem", lineHeight: "1.15", margin: 0 }}>
+        <Badge tone="accent" style={{ marginBottom: space[6] }}>
+          MVP · self-hostable
+        </Badge>
+        <h1
+          style={{
+            ...typography.size["4xl"],
+            fontWeight: typography.weight.semibold,
+            margin: 0,
+            color: colors.text,
+          }}
+        >
           Host AI-generated HTML apps without absorbing them.
         </h1>
-        <p
-          style={{
-            marginTop: "1.25rem",
-            fontSize: "1.0625rem",
-            lineHeight: "1.6",
-            color: "#4b5563",
-          }}
+        <Text
+          size="lg"
+          tone="muted"
+          style={{ marginTop: space[6], maxWidth: "36rem", marginInline: "auto" }}
         >
           Drop an <code>index.html</code> file. {PRODUCT_NAME} gives it a URL, provisions a database
           in <em>your</em> Supabase project, and serves it with real auth. The same file works on
           our platform, on a static host, or as a <code>file://</code> double-click. Leave whenever;
           your data and your app keep working.
-        </p>
-        <div
-          style={{
-            marginTop: "2rem",
-            display: "flex",
-            gap: "0.75rem",
-            justifyContent: "center",
-            flexWrap: "wrap",
-          }}
-        >
-          <Link href="/signup" style={primaryLinkStyle}>
+        </Text>
+        <Row gap={3} justify="center" style={{ marginTop: space[8] }}>
+          <LinkButton href="/signup" variant="primary">
             Get started
-          </Link>
-          <Link href="https://github.com/luisgrandegg/buendia" style={secondaryLinkStyle}>
+          </LinkButton>
+          <LinkButton href="https://github.com/luisgrandegg/buendia" variant="secondary">
             Read the code
-          </Link>
+          </LinkButton>
+        </Row>
+      </section>
+
+      <section
+        style={{
+          maxWidth: widths.hero,
+          margin: "0 auto",
+          padding: `${space[6]} ${space[6]} ${space[16]}`,
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(18rem, 1fr))",
+          gap: space[5],
+        }}
+      >
+        <Card>
+          <Heading level={3} style={{ marginBottom: space[2] }}>
+            Hosted
+          </Heading>
+          <Text tone="muted">
+            Connect Supabase once, upload your HTML, get a URL. {PRODUCT_NAME} mints short-lived,
+            per-user JWTs against your project. Share with named people by email; revoke any time.
+          </Text>
+        </Card>
+        <Card>
+          <Heading level={3} style={{ marginBottom: space[2] }}>
+            Standalone
+          </Heading>
+          <Text tone="muted">
+            Export the bundle. The SDK detects no injected config, prompts for Supabase credentials,
+            and runs the app from <code>file://</code> or any static host. Identical surface to
+            hosted; security falls back to RLS.
+          </Text>
+        </Card>
+        <Card>
+          <Heading level={3} style={{ marginBottom: space[2] }}>
+            Build with Claude
+          </Heading>
+          <Text tone="muted">
+            Ask Claude to <em>"host this on Buendia"</em>. {PRODUCT_NAME} ships a Model Context
+            Protocol server — paste a snippet into Claude Desktop or Claude Code and ship apps
+            without leaving the chat.{" "}
+            <Link href="/docs/mcp" style={{ color: colors.textAccent }}>
+              Setup →
+            </Link>
+          </Text>
+        </Card>
+      </section>
+
+      <section
+        style={{
+          background: colors.bgMuted,
+          borderTop: `1px solid ${colors.border}`,
+          borderBottom: `1px solid ${colors.border}`,
+          padding: `${space[16]} ${space[6]}`,
+        }}
+      >
+        <div style={{ maxWidth: widths.hero, margin: "0 auto" }}>
+          <Heading level={2} style={{ marginBottom: space[6] }}>
+            The eight principles
+          </Heading>
+          <Stack gap={3}>
+            {PRINCIPLES.map((p) => (
+              <Row key={p.number} gap={4} align="baseline">
+                <span
+                  style={{
+                    flexShrink: 0,
+                    width: "2rem",
+                    height: "2rem",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    background: colors.bg,
+                    border: `1px solid ${colors.border}`,
+                    borderRadius: radii.md,
+                    fontFamily: typography.fontMono,
+                    ...typography.size.sm,
+                    color: colors.textMuted,
+                  }}
+                >
+                  {p.number}
+                </span>
+                <div>
+                  <Text style={{ fontWeight: typography.weight.semibold }}>{p.name}</Text>
+                  <Text tone="muted" size="md">
+                    {p.one_liner}
+                  </Text>
+                </div>
+              </Row>
+            ))}
+          </Stack>
         </div>
       </section>
 
       <section
         style={{
-          padding: "2rem 1.5rem",
-          maxWidth: "56rem",
-          margin: "0 auto",
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(20rem, 1fr))",
-          gap: "1.5rem",
-        }}
-      >
-        <article style={cardStyle}>
-          <h2 style={cardTitleStyle}>Hosted</h2>
-          <p style={cardBodyStyle}>
-            Connect Supabase once, upload your HTML, get a URL. {PRODUCT_NAME} mints short-lived,
-            per-user JWTs against your project. Share with named people by email; revoke any time.
-          </p>
-        </article>
-        <article style={cardStyle}>
-          <h2 style={cardTitleStyle}>Standalone</h2>
-          <p style={cardBodyStyle}>
-            Export the bundle. The SDK detects no injected config, prompts for Supabase credentials,
-            and runs the app from <code>file://</code> or any static host. Identical surface to
-            hosted; security falls back to RLS.
-          </p>
-        </article>
-        <article style={cardStyle}>
-          <h2 style={cardTitleStyle}>Build with Claude</h2>
-          <p style={cardBodyStyle}>
-            Ask Claude to <em>"host this on Buendia"</em>. {PRODUCT_NAME} ships a Model Context
-            Protocol server — paste a snippet into Claude Desktop or Claude Code and ship apps
-            without leaving the chat.{" "}
-            <Link href="/docs/mcp" style={{ color: "#2563eb" }}>
-              Setup →
-            </Link>
-          </p>
-        </article>
-      </section>
-
-      <section
-        style={{
-          padding: "3rem 1.5rem",
-          maxWidth: "56rem",
+          padding: `${space[16]} ${space[6]}`,
+          maxWidth: widths.prose,
           margin: "0 auto",
         }}
       >
-        <h2 style={{ fontSize: "1.25rem", marginBottom: "1.25rem" }}>The eight principles</h2>
-        <ol style={{ paddingLeft: "1.25rem", margin: 0 }}>
-          {PRINCIPLES.map((p) => (
-            <li key={p.number} style={{ marginBottom: "0.875rem", lineHeight: "1.55" }}>
-              <strong>{p.name}.</strong> <span style={{ color: "#4b5563" }}>{p.one_liner}</span>
-            </li>
-          ))}
-        </ol>
-      </section>
-
-      <section
-        style={{
-          padding: "2rem 1.5rem 4rem 1.5rem",
-          maxWidth: "44rem",
-          margin: "0 auto",
-        }}
-      >
-        <h2 style={{ fontSize: "1.25rem", marginBottom: "0.5rem" }}>Pricing</h2>
-        <p style={{ color: "#4b5563", lineHeight: "1.6" }}>
+        <Heading level={2} style={{ marginBottom: space[3] }}>
+          Pricing
+        </Heading>
+        <Text tone="muted">
           Free during the MVP. The hosted SaaS will charge once it's worth charging for. The
-          self-hosted distribution is AGPLv3 and ships from the same codebase — no &ldquo;upgrade to
-          pro&rdquo; tier gating features. See the{" "}
+          self-hosted distribution is AGPLv3 and ships from the same codebase — no "upgrade to pro"
+          tier gating features. See the{" "}
           <Link
             href="https://github.com/luisgrandegg/buendia/blob/main/CONSTITUTION.md"
-            style={{ color: "inherit" }}
+            style={{ color: colors.textAccent }}
           >
             constitution
           </Link>{" "}
           for the contract.
-        </p>
+        </Text>
       </section>
 
       <footer
         style={{
-          borderTop: "1px solid #e5e7eb",
-          padding: "1.5rem",
-          textAlign: "center",
-          color: "#6b7280",
-          fontSize: "0.8125rem",
+          borderTop: `1px solid ${colors.border}`,
+          padding: `${space[6]} ${space[6]}`,
+          background: colors.bg,
         }}
       >
-        <Link href="/docs/mcp" style={{ color: "inherit", marginRight: "1rem" }}>
-          Use with Claude
-        </Link>
-        <Link href="/docs/access-removal" style={{ color: "inherit", marginRight: "1rem" }}>
-          Access removal
-        </Link>
-        <Link
-          href="https://github.com/luisgrandegg/buendia"
-          style={{ color: "inherit", marginRight: "1rem" }}
+        <div
+          style={{
+            maxWidth: widths.hero,
+            margin: "0 auto",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: space[4],
+            flexWrap: "wrap",
+            color: colors.textMuted,
+            ...typography.size.sm,
+          }}
         >
-          GitHub
-        </Link>
-        <Link href="/signin" style={{ color: "inherit" }}>
-          Sign in
-        </Link>
+          <Text size="sm" tone="muted">
+            © {PRODUCT_NAME}
+          </Text>
+          <Row gap={5}>
+            <Link href="/docs/mcp" style={{ color: "inherit", textDecoration: "none" }}>
+              Use with Claude
+            </Link>
+            <Link href="/docs/access-removal" style={{ color: "inherit", textDecoration: "none" }}>
+              Access removal
+            </Link>
+            <Link
+              href="https://github.com/luisgrandegg/buendia"
+              style={{ color: "inherit", textDecoration: "none" }}
+            >
+              GitHub
+            </Link>
+            <Link href="/signin" style={{ color: "inherit", textDecoration: "none" }}>
+              Sign in
+            </Link>
+          </Row>
+        </div>
       </footer>
     </main>
   );
 }
-
-const textLinkStyle = {
-  padding: "0.5rem 0.875rem",
-  fontSize: "0.9375rem",
-  color: "#111827",
-  textDecoration: "none",
-};
-
-const primaryLinkStyle = {
-  padding: "0.5rem 1rem",
-  borderRadius: "0.375rem",
-  background: "#111827",
-  color: "white",
-  fontSize: "0.9375rem",
-  textDecoration: "none",
-};
-
-const secondaryLinkStyle = {
-  padding: "0.5rem 1rem",
-  borderRadius: "0.375rem",
-  border: "1px solid #d1d5db",
-  background: "white",
-  color: "#111827",
-  fontSize: "0.9375rem",
-  textDecoration: "none",
-};
-
-const cardStyle = {
-  padding: "1.5rem",
-  border: "1px solid #e5e7eb",
-  borderRadius: "0.5rem",
-  background: "#fafafa",
-};
-
-const cardTitleStyle = {
-  fontSize: "1.125rem",
-  margin: "0 0 0.5rem 0",
-};
-
-const cardBodyStyle = {
-  color: "#4b5563",
-  fontSize: "0.9375rem",
-  lineHeight: "1.55",
-  margin: 0,
-};

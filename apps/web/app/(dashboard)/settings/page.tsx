@@ -1,108 +1,110 @@
 import { provisionProjectAction, refreshCredentialsAction } from "@/app/actions/owner-backend";
 import { createClient } from "@/lib/supabase/server";
 import { getOwnerBackendStatus } from "@/lib/owner-backend";
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  DescriptionRow,
+  Heading,
+  LinkButton,
+  PageHeader,
+  Row,
+  Stack,
+  Text,
+  colors,
+  space,
+} from "@/lib/ui";
 
 export const metadata = { title: "Settings · Buendia" };
 
-const rowStyle = {
-  display: "grid",
-  gridTemplateColumns: "12rem 1fr",
-  padding: "1rem 0",
-  borderBottom: "1px solid #e5e7eb",
-  fontSize: "0.9375rem",
-};
-
-const labelStyle = { color: "#6b7280" };
-
-const supabaseMessages: Record<string, { tone: "ok" | "warn"; text: string }> = {
-  ok: { tone: "ok", text: "Supabase connected. Provision your project to finish." },
+const supabaseMessages: Record<string, { tone: "success" | "warning"; text: string }> = {
+  ok: { tone: "success", text: "Supabase connected. Provision your project to finish." },
   denied: {
-    tone: "warn",
+    tone: "warning",
     text: "You declined the Supabase authorization. You can retry whenever you're ready.",
   },
   error: {
-    tone: "warn",
+    tone: "warning",
     text: "Something went wrong during the Supabase handshake. Please try again.",
   },
 };
 
-const provisionMessages: Record<string, { tone: "ok" | "warn"; text: string }> = {
-  ok: { tone: "ok", text: "Your Buendia Apps project is ready." },
-  unauthenticated: { tone: "warn", text: "Sign in and try again." },
-  not_connected: {
-    tone: "warn",
-    text: "Connect Supabase before provisioning a project.",
-  },
+const provisionMessages: Record<string, { tone: "success" | "warning"; text: string }> = {
+  ok: { tone: "success", text: "Your Buendia Apps project is ready." },
+  unauthenticated: { tone: "warning", text: "Sign in and try again." },
+  not_connected: { tone: "warning", text: "Connect Supabase before provisioning a project." },
   oauth_refresh_failed: {
-    tone: "warn",
+    tone: "warning",
     text: "Supabase refused the stored credentials. Disconnect and reconnect to retry.",
   },
   list_orgs_failed: {
-    tone: "warn",
+    tone: "warning",
     text: "Couldn't read your Supabase organizations. Please try again.",
   },
   no_organization: {
-    tone: "warn",
+    tone: "warning",
     text: "Create a Supabase organization first, then provision again.",
   },
   free_tier_limit: {
-    tone: "warn",
+    tone: "warning",
     text: "Your Supabase organization is at the free-tier project limit. Free up a slot or upgrade in Supabase, then try again.",
   },
   create_project_failed: {
-    tone: "warn",
+    tone: "warning",
     text: "Supabase rejected the project creation. Please try again.",
   },
   project_unhealthy: {
-    tone: "warn",
+    tone: "warning",
     text: "The new project didn't reach a healthy state. Try again or check Supabase's status.",
   },
   still_provisioning: {
-    tone: "warn",
+    tone: "warning",
     text: "Supabase is still preparing your project. Refresh this page in a moment.",
   },
   fetch_keys_failed: {
-    tone: "warn",
+    tone: "warning",
     text: "Project created, but Buendia couldn't read its API keys. Try the provision step again.",
   },
   persist_failed: {
-    tone: "warn",
+    tone: "warning",
     text: "Project created, but Buendia couldn't save its credentials. Try again.",
   },
 };
 
-const disconnectMessages: Record<string, { tone: "ok" | "warn"; text: string }> = {
+const disconnectMessages: Record<string, { tone: "success" | "warning"; text: string }> = {
   ok: {
-    tone: "ok",
+    tone: "success",
     text: "Disconnected. Your Supabase project + data are untouched and will keep running.",
   },
   write_failed: {
-    tone: "warn",
+    tone: "warning",
     text: "Couldn't clear the stored credentials. Please try again.",
   },
 };
 
-const refreshCredsMessages: Record<string, { tone: "ok" | "warn"; text: string }> = {
-  ok: { tone: "ok", text: "Credentials refreshed from Supabase." },
-  unauthenticated: { tone: "warn", text: "Sign in and try again." },
+const refreshCredsMessages: Record<string, { tone: "success" | "warning"; text: string }> = {
+  ok: { tone: "success", text: "Credentials refreshed from Supabase." },
+  unauthenticated: { tone: "warning", text: "Sign in and try again." },
   not_connected: {
-    tone: "warn",
+    tone: "warning",
     text: "Connect Supabase first before refreshing credentials.",
   },
   no_project: {
-    tone: "warn",
+    tone: "warning",
     text: "Provision your project first, then refresh credentials.",
   },
   oauth_refresh_failed: {
-    tone: "warn",
+    tone: "warning",
     text: "Supabase refused the stored OAuth grant. Reconnect from this page to recover.",
   },
   fetch_keys_failed: {
-    tone: "warn",
+    tone: "warning",
     text: "Couldn't read the project's API keys. Please try again.",
   },
   persist_failed: {
-    tone: "warn",
+    tone: "warning",
     text: "Got fresh keys from Supabase but couldn't save them. Try again.",
   },
 };
@@ -123,97 +125,58 @@ export default async function SettingsPage({ searchParams }: PageProps) {
   } = await supabase.auth.getUser();
 
   const status = user ? await getOwnerBackendStatus(user.id) : null;
-  const {
-    supabase: supabaseParam,
-    provision: provisionParam,
-    disconnect: disconnectParam,
-    refresh_creds: refreshCredsParam,
-  } = await searchParams;
+  const params = await searchParams;
   const banner =
-    (refreshCredsParam && refreshCredsMessages[refreshCredsParam]) ||
-    (disconnectParam && disconnectMessages[disconnectParam]) ||
-    (provisionParam && provisionMessages[provisionParam]) ||
-    (supabaseParam && supabaseMessages[supabaseParam]) ||
+    (params.refresh_creds && refreshCredsMessages[params.refresh_creds]) ||
+    (params.disconnect && disconnectMessages[params.disconnect]) ||
+    (params.provision && provisionMessages[params.provision]) ||
+    (params.supabase && supabaseMessages[params.supabase]) ||
     undefined;
 
   const grantRevoked = status?.exists && status.grantStatus === "revoked";
 
   return (
-    <div>
-      <header style={{ marginBottom: "1.5rem" }}>
-        <h1 style={{ fontSize: "1.5rem", margin: 0 }}>Settings</h1>
-      </header>
+    <Stack gap={8}>
+      <PageHeader
+        title="Settings"
+        description="Account, connected backend, access tokens. Everything Buendia knows about you."
+      />
 
       {grantRevoked ? (
-        <div
-          role="alert"
-          style={{
-            padding: "0.875rem 1rem",
-            marginBottom: "1.5rem",
-            borderRadius: "0.375rem",
-            border: "1px solid #fecaca",
-            background: "#fef2f2",
-            color: "#991b1b",
-            fontSize: "0.9375rem",
-            lineHeight: "1.5",
-          }}
+        <Alert
+          tone="danger"
+          title="Supabase connection broken"
+          action={
+            <form action="/api/auth/supabase/start" method="post">
+              <Button type="submit" size="sm" variant="danger">
+                Reconnect Supabase
+              </Button>
+            </form>
+          }
         >
-          <strong>Supabase connection broken.</strong> The OAuth grant Buendia held was revoked
-          (possibly from your Supabase dashboard). Apps are temporarily unavailable until you
-          reconnect.
-          <form action="/api/auth/supabase/start" method="post" style={{ marginTop: "0.625rem" }}>
-            <button
-              type="submit"
-              style={{
-                padding: "0.375rem 0.75rem",
-                borderRadius: "0.375rem",
-                border: "1px solid #991b1b",
-                background: "white",
-                color: "#991b1b",
-                fontSize: "0.875rem",
-                cursor: "pointer",
-              }}
-            >
-              Reconnect Supabase
-            </button>
-          </form>
-        </div>
+          The OAuth grant Buendia held was revoked (possibly from your Supabase dashboard). Apps are
+          temporarily unavailable until you reconnect.
+        </Alert>
       ) : null}
 
-      {banner ? (
-        <div
-          role="status"
-          style={{
-            padding: "0.75rem 1rem",
-            marginBottom: "1.5rem",
-            borderRadius: "0.375rem",
-            border: `1px solid ${banner.tone === "ok" ? "#bbf7d0" : "#fecaca"}`,
-            background: banner.tone === "ok" ? "#f0fdf4" : "#fef2f2",
-            color: banner.tone === "ok" ? "#166534" : "#991b1b",
-            fontSize: "0.9375rem",
-          }}
-        >
-          {banner.text}
-        </div>
-      ) : null}
+      {banner ? <Alert tone={banner.tone}>{banner.text}</Alert> : null}
 
-      <section>
-        <h2 style={{ fontSize: "1rem", marginBottom: "0.5rem" }}>Account</h2>
-        <dl style={{ margin: 0 }}>
-          <div style={rowStyle}>
-            <dt style={labelStyle}>Email</dt>
-            <dd style={{ margin: 0 }}>{user?.email ?? "—"}</dd>
+      <Stack gap={4}>
+        <Heading level={2}>Account</Heading>
+        <Card padding="none">
+          <div style={{ padding: `0 ${space[5]}` }}>
+            <DescriptionRow label="Email">{user?.email ?? "—"}</DescriptionRow>
+            <div style={{ marginBottom: -1 }}>
+              <DescriptionRow label="User ID">
+                <code style={{ fontSize: "0.875em" }}>{user?.id ?? "—"}</code>
+              </DescriptionRow>
+            </div>
           </div>
-          <div style={rowStyle}>
-            <dt style={labelStyle}>User ID</dt>
-            <dd style={{ margin: 0, fontFamily: "ui-monospace, monospace" }}>{user?.id ?? "—"}</dd>
-          </div>
-        </dl>
-      </section>
+        </Card>
+      </Stack>
 
-      <section style={{ marginTop: "2rem" }}>
-        <h2 style={{ fontSize: "1rem", marginBottom: "0.5rem" }}>Connected backend</h2>
-
+      <Stack gap={4}>
+        <Heading level={2}>Connected backend</Heading>
         {!status?.exists ? (
           <ConnectSupabaseCta />
         ) : status.hasProject ? (
@@ -221,57 +184,45 @@ export default async function SettingsPage({ searchParams }: PageProps) {
         ) : (
           <ProvisionProjectCta connectedAt={status.connectedAt} />
         )}
-      </section>
+      </Stack>
 
-      <section style={{ marginTop: "2.5rem" }}>
-        <h2 style={{ fontSize: "1rem", marginBottom: "0.5rem" }}>Access tokens</h2>
-        <p style={{ color: "#4b5563", fontSize: "0.9375rem", margin: "0 0 0.75rem 0" }}>
-          Mint personal access tokens for the Claude MCP server, curl scripts, or the upcoming CLI.
-        </p>
-        <a
-          href="/settings/tokens"
-          style={{
-            display: "inline-block",
-            padding: "0.5rem 1rem",
-            borderRadius: "0.375rem",
-            border: "1px solid #d1d5db",
-            background: "white",
-            color: "#111827",
-            fontSize: "0.9375rem",
-            textDecoration: "none",
-          }}
-        >
-          Manage tokens
-        </a>
-      </section>
+      <Stack gap={4}>
+        <Heading level={2}>Access tokens</Heading>
+        <Card>
+          <Stack gap={4}>
+            <Text tone="muted">
+              Mint personal access tokens for the Claude MCP server, curl scripts, or the upcoming
+              CLI.
+            </Text>
+            <Row gap={3}>
+              <LinkButton href="/settings/tokens">Manage tokens</LinkButton>
+              <LinkButton href="/docs/mcp" variant="ghost">
+                Use with Claude →
+              </LinkButton>
+            </Row>
+          </Stack>
+        </Card>
+      </Stack>
 
       {status?.exists ? (
-        <section style={{ marginTop: "2.5rem" }}>
-          <h2 style={{ fontSize: "1rem", marginBottom: "0.5rem", color: "#991b1b" }}>
+        <Stack gap={4}>
+          <Heading level={2} style={{ color: colors.danger }}>
             Danger zone
-          </h2>
-          <p style={{ color: "#4b5563", fontSize: "0.9375rem", margin: "0 0 0.75rem 0" }}>
-            Disconnect Buendia from your Supabase account. Your project and data stay; we just stop
-            being involved.
-          </p>
-          <a
-            href="/settings/disconnect"
-            style={{
-              display: "inline-block",
-              padding: "0.5rem 1rem",
-              borderRadius: "0.375rem",
-              border: "1px solid #fecaca",
-              background: "white",
-              color: "#b91c1c",
-              fontSize: "0.9375rem",
-              textDecoration: "none",
-            }}
-          >
-            Disconnect Buendia…
-          </a>
-        </section>
+          </Heading>
+          <Card style={{ borderColor: colors.dangerBorder }}>
+            <Row gap={4} justify="space-between" align="center">
+              <Text tone="muted">
+                Disconnect Buendia from your Supabase account. Your project and data stay; we just
+                stop being involved.
+              </Text>
+              <LinkButton href="/settings/disconnect" variant="danger">
+                Disconnect Buendia…
+              </LinkButton>
+            </Row>
+          </Card>
+        </Stack>
       ) : null}
-    </div>
+    </Stack>
   );
 }
 
@@ -281,97 +232,87 @@ function ConnectedBackendDetails({
   status: Awaited<ReturnType<typeof getOwnerBackendStatus>>;
 }) {
   return (
-    <div>
-      <dl style={{ margin: 0 }}>
-        <div style={rowStyle}>
-          <dt style={labelStyle}>Supabase</dt>
-          <dd style={{ margin: 0 }}>Connected · project provisioned</dd>
-        </div>
-        <div style={rowStyle}>
-          <dt style={labelStyle}>Connected at</dt>
-          <dd style={{ margin: 0 }}>
-            {status.connectedAt ? new Date(status.connectedAt).toLocaleString() : "—"}
-          </dd>
-        </div>
-        <div style={rowStyle}>
-          <dt style={labelStyle}>Last checked</dt>
-          <dd style={{ margin: 0 }}>
-            {status.lastValidatedAt ? new Date(status.lastValidatedAt).toLocaleString() : "—"}
-          </dd>
-        </div>
-      </dl>
-      <form action={refreshCredentialsAction} style={{ marginTop: "1rem" }}>
-        <button
-          type="submit"
-          style={{
-            padding: "0.375rem 0.75rem",
-            borderRadius: "0.375rem",
-            border: "1px solid #d1d5db",
-            background: "white",
-            color: "#111827",
-            fontSize: "0.875rem",
-            cursor: "pointer",
-          }}
-        >
-          Refresh credentials
-        </button>
-        <span style={{ marginLeft: "0.625rem", fontSize: "0.8125rem", color: "#6b7280" }}>
-          Re-fetches the project's API keys and JWT secret via the OAuth grant. Use this if you
-          rotated keys in Supabase.
-        </span>
-      </form>
-    </div>
+    <Card padding="none">
+      <div style={{ padding: `0 ${space[5]}` }}>
+        <DescriptionRow label="Supabase">
+          <Row gap={2}>
+            <Badge tone="success">connected</Badge>
+            <Text size="md" tone="muted">
+              project provisioned
+            </Text>
+          </Row>
+        </DescriptionRow>
+        <DescriptionRow label="Connected at">
+          {status.connectedAt ? new Date(status.connectedAt).toLocaleString() : "—"}
+        </DescriptionRow>
+        <DescriptionRow label="Last checked">
+          {status.lastValidatedAt ? new Date(status.lastValidatedAt).toLocaleString() : "—"}
+        </DescriptionRow>
+      </div>
+      <div style={{ padding: space[5], borderTop: `1px solid ${colors.border}` }}>
+        <Row gap={3} align="center">
+          <form action={refreshCredentialsAction}>
+            <Button type="submit" size="sm">
+              Refresh credentials
+            </Button>
+          </form>
+          <Text size="sm" tone="muted">
+            Re-fetches the project's API keys + JWT secret via the OAuth grant. Use this if you
+            rotated keys in Supabase.
+          </Text>
+        </Row>
+      </div>
+    </Card>
   );
 }
 
 function ConnectSupabaseCta() {
   return (
-    <form action="/api/auth/supabase/start" method="post">
-      <p style={{ color: "#4b5563", margin: "0 0 1rem 0" }}>
-        To host your apps, Buendia needs to manage projects in your Supabase organization. You stay
-        the owner; Buendia drops out cleanly if you disconnect.
-      </p>
-      <button type="submit" style={primaryButtonStyle}>
-        Connect Supabase
-      </button>
-    </form>
+    <Card>
+      <Stack gap={4}>
+        <Text tone="muted">
+          To host your apps, Buendia needs to manage projects in your Supabase organization. You
+          stay the owner; Buendia drops out cleanly if you disconnect.
+        </Text>
+        <form action="/api/auth/supabase/start" method="post">
+          <Button type="submit" variant="primary">
+            Connect Supabase
+          </Button>
+        </form>
+      </Stack>
+    </Card>
   );
 }
 
 function ProvisionProjectCta({ connectedAt }: { connectedAt: string | null }) {
   return (
-    <div>
-      <dl style={{ margin: "0 0 1rem 0" }}>
-        <div style={rowStyle}>
-          <dt style={labelStyle}>Supabase</dt>
-          <dd style={{ margin: 0 }}>OAuth complete · project not yet provisioned</dd>
-        </div>
-        <div style={rowStyle}>
-          <dt style={labelStyle}>Connected at</dt>
-          <dd style={{ margin: 0 }}>
-            {connectedAt ? new Date(connectedAt).toLocaleString() : "—"}
-          </dd>
-        </div>
-      </dl>
-      <p style={{ color: "#4b5563", margin: "0 0 1rem 0" }}>
-        Buendia will create one project named "Buendia Apps" in your first Supabase organization.
-        This takes 30–60 seconds. You can keep using the dashboard while it runs.
-      </p>
-      <form action={provisionProjectAction}>
-        <button type="submit" style={primaryButtonStyle}>
-          Provision project
-        </button>
-      </form>
-    </div>
+    <Card padding="none">
+      <div style={{ padding: `0 ${space[5]}` }}>
+        <DescriptionRow label="Supabase">
+          <Row gap={2}>
+            <Badge tone="accent">OAuth complete</Badge>
+            <Text size="md" tone="muted">
+              project not yet provisioned
+            </Text>
+          </Row>
+        </DescriptionRow>
+        <DescriptionRow label="Connected at">
+          {connectedAt ? new Date(connectedAt).toLocaleString() : "—"}
+        </DescriptionRow>
+      </div>
+      <div style={{ padding: space[5], borderTop: `1px solid ${colors.border}` }}>
+        <Stack gap={4}>
+          <Text tone="muted">
+            Buendia will create one project named "Buendia Apps" in your first Supabase
+            organization. This takes 30–60 seconds. You can keep using the dashboard while it runs.
+          </Text>
+          <form action={provisionProjectAction}>
+            <Button type="submit" variant="primary">
+              Provision project
+            </Button>
+          </form>
+        </Stack>
+      </div>
+    </Card>
   );
 }
-
-const primaryButtonStyle = {
-  padding: "0.5rem 1rem",
-  borderRadius: "0.375rem",
-  border: "1px solid #111827",
-  background: "#111827",
-  color: "white",
-  fontSize: "0.9375rem",
-  cursor: "pointer",
-} as const;

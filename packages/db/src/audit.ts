@@ -26,6 +26,9 @@ export const AUDIT_ACTIONS = [
   "share.invited",
   "share.role_changed",
   "share.removed",
+  "pat.created",
+  "pat.revoked",
+  "pat.used",
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];

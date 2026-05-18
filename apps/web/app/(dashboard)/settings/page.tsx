@@ -223,6 +223,28 @@ export default async function SettingsPage({ searchParams }: PageProps) {
         )}
       </section>
 
+      <section style={{ marginTop: "2.5rem" }}>
+        <h2 style={{ fontSize: "1rem", marginBottom: "0.5rem" }}>Access tokens</h2>
+        <p style={{ color: "#4b5563", fontSize: "0.9375rem", margin: "0 0 0.75rem 0" }}>
+          Mint personal access tokens for the Claude MCP server, curl scripts, or the upcoming CLI.
+        </p>
+        <a
+          href="/settings/tokens"
+          style={{
+            display: "inline-block",
+            padding: "0.5rem 1rem",
+            borderRadius: "0.375rem",
+            border: "1px solid #d1d5db",
+            background: "white",
+            color: "#111827",
+            fontSize: "0.9375rem",
+            textDecoration: "none",
+          }}
+        >
+          Manage tokens
+        </a>
+      </section>
+
       {status?.exists ? (
         <section style={{ marginTop: "2.5rem" }}>
           <h2 style={{ fontSize: "1rem", marginBottom: "0.5rem", color: "#991b1b" }}>

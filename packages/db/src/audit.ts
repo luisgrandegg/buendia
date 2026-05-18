@@ -19,6 +19,7 @@ export const AUDIT_ACTIONS = [
   "backend.project_provisioned",
   "backend.disconnected",
   "backend.credentials_refreshed",
+  "backend.rls_disabled",
   "app.created",
   "app.renamed",
   "app.deleted",

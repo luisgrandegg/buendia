@@ -217,3 +217,40 @@ export async function executeSql<T = unknown>(
     body: { query },
   });
 }
+
+/**
+ * Return any tables in the supplied app-* schemas where Row-Level
+ * Security has been disabled. Used by the daily cron (ticket 61) to
+ * detect RLS drift — the user might have run
+ * `alter table … disable row level security` directly against their
+ * project after Buendia provisioned it. See SECURITY_AUDIT.md §M8 and
+ * the M8 item of backlog/74-rls-validation-cron-and-nits.md.
+ *
+ * Schema names come from `public.apps.schema_name` (which the
+ * provisioner mints and matches `^app_[a-z0-9_]+$`). They're quoted
+ * as SQL string literals before splicing — belt-and-braces on top of
+ * the regex.
+ */
+export interface RlsDisabledRow {
+  schema: string;
+  table: string;
+}
+
+export async function listRlsDisabledTables(
+  accessToken: string,
+  projectRef: string,
+  schemas: string[],
+): Promise<RlsDisabledRow[]> {
+  if (schemas.length === 0) return [];
+  const literals = schemas.map((s) => `'${s.replaceAll("'", "''")}'`).join(", ");
+  const query = `
+    select n.nspname as schema, c.relname as "table"
+    from pg_class c
+    join pg_namespace n on n.oid = c.relnamespace
+    where c.relkind = 'r'
+      and n.nspname in (${literals})
+      and not c.relrowsecurity
+    order by n.nspname, c.relname
+  `;
+  return executeSql<RlsDisabledRow[]>(accessToken, projectRef, query);
+}

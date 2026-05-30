@@ -24,8 +24,17 @@ import { createClient } from "@/lib/supabase/server";
 
 const HTML_BUCKET = "app-html";
 
+// Slugs are server-generated (lowercase letters, digits, hyphens; we mint
+// up to ~64 chars). Anything else can't refer to a real app, so reject
+// early without paying for the DB round-trip and without splicing the
+// value into log lines or storage paths. See SECURITY_AUDIT.md §L5.
+const SLUG_REGEX = /^[a-z0-9-]{1,64}$/;
+
 export async function GET(_request: Request, { params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
+  if (!SLUG_REGEX.test(slug)) {
+    return new NextResponse(notFoundHtml(), { status: 404, headers: htmlHeaders() });
+  }
 
   const supabase = await createClient();
   const {

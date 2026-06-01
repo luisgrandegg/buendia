@@ -89,6 +89,33 @@ function assertSafeSchemaName(name: string): void {
 }
 
 /**
+ * Postgres identifier quoting. Wraps `name` in double quotes and
+ * doubles any embedded double quotes — equivalent to `quote_ident(...)`
+ * / `format('%I', ...)` on the SQL side.
+ *
+ * `assertSafeSchemaName` makes today's inputs safe even unquoted, but
+ * the moment anyone relaxes that regex (unicode handles, longer
+ * prefixes, hyphens, …) bare interpolation becomes SQL injection
+ * against the owner's Supabase project — where Buendia runs with
+ * elevated grants. Quote unconditionally so the SQL stays safe under
+ * regex drift. See SECURITY_AUDIT.md §H1 and
+ * backlog/done/66-provisioner-identifier-quoting.md.
+ */
+export function quoteIdent(name: string): string {
+  return `"${name.replaceAll('"', '""')}"`;
+}
+
+/**
+ * Postgres string-literal quoting, for the single spot we have to
+ * splice the schema name into a string context (the
+ * `pg_tables.schemaname = '<name>'` predicate in the DO block). Use
+ * `quoteIdent` everywhere else.
+ */
+function quoteLiteral(value: string): string {
+  return `'${value.replaceAll("'", "''")}'`;
+}
+
+/**
  * Build the full SQL script that gets executed in a single Management
  * API call. Wrapped in a transaction so a failure rolls back cleanly.
  *
@@ -102,6 +129,8 @@ function assertSafeSchemaName(name: string): void {
  */
 export function buildProvisionSql(schemaName: string, userSql: string): string {
   assertSafeSchemaName(schemaName);
+  const ident = quoteIdent(schemaName);
+  const literal = quoteLiteral(schemaName);
 
   const cleaned = userSql.trim();
   const userBody = cleaned.length > 0 ? cleaned + (cleaned.endsWith(";") ? "" : ";") : "";
@@ -109,9 +138,9 @@ export function buildProvisionSql(schemaName: string, userSql: string): string {
   return `
 begin;
 
-drop schema if exists ${schemaName} cascade;
-create schema ${schemaName};
-set local search_path = ${schemaName}, public;
+drop schema if exists ${ident} cascade;
+create schema ${ident};
+set local search_path = ${ident}, public;
 
 ${userBody}
 
@@ -120,28 +149,28 @@ declare
   t text;
 begin
   for t in
-    select tablename from pg_tables where schemaname = '${schemaName}'
+    select tablename from pg_tables where schemaname = ${literal}
   loop
     execute format(
-      'alter table ${schemaName}.%I add column if not exists created_by uuid default auth.uid()',
+      'alter table ${ident}.%I add column if not exists created_by uuid default auth.uid()',
       t
     );
     execute format(
-      'alter table ${schemaName}.%I add column if not exists team_id uuid default ((auth.jwt() ->> ''team_id'')::uuid)',
+      'alter table ${ident}.%I add column if not exists team_id uuid default ((auth.jwt() ->> ''team_id'')::uuid)',
       t
     );
-    execute format('alter table ${schemaName}.%I enable row level security', t);
+    execute format('alter table ${ident}.%I enable row level security', t);
 
     -- Drop policies before recreating so re-provisioning is idempotent.
-    execute format('drop policy if exists "buendia members read" on ${schemaName}.%I', t);
-    execute format('drop policy if exists "buendia editors write" on ${schemaName}.%I', t);
+    execute format('drop policy if exists "buendia members read" on ${ident}.%I', t);
+    execute format('drop policy if exists "buendia editors write" on ${ident}.%I', t);
 
     execute format(
-      $p$create policy "buendia members read" on ${schemaName}.%I for select using (team_id = ((auth.jwt() ->> 'team_id')::uuid))$p$,
+      $p$create policy "buendia members read" on ${ident}.%I for select using (team_id = ((auth.jwt() ->> 'team_id')::uuid))$p$,
       t
     );
     execute format(
-      $p$create policy "buendia editors write" on ${schemaName}.%I for all using (team_id = ((auth.jwt() ->> 'team_id')::uuid) and (auth.jwt() ->> 'buendia_role') in ('owner','editor')) with check (team_id = ((auth.jwt() ->> 'team_id')::uuid))$p$,
+      $p$create policy "buendia editors write" on ${ident}.%I for all using (team_id = ((auth.jwt() ->> 'team_id')::uuid) and (auth.jwt() ->> 'buendia_role') in ('owner','editor')) with check (team_id = ((auth.jwt() ->> 'team_id')::uuid))$p$,
       t
     );
   end loop;
@@ -158,5 +187,5 @@ commit;
  */
 export function buildDropSchemaSql(schemaName: string): string {
   assertSafeSchemaName(schemaName);
-  return `drop schema if exists ${schemaName} cascade;`;
+  return `drop schema if exists ${quoteIdent(schemaName)} cascade;`;
 }

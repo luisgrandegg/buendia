@@ -87,10 +87,9 @@ export function registerTools(
 
   server.tool(
     "whoami",
-    `Returns the Buendia account the current PAT belongs to plus a snapshot of
-the connected Supabase backend (whether it's connected, whether a project
-has been provisioned, the OAuth grant status). Cheapest tool — call it
-once on startup to confirm wiring.`,
+    `Returns the Buendia account the current PAT belongs to (id + email).
+Cheapest tool — call it once on startup to confirm wiring. Backend grant
+metadata is dashboard-only and is not returned to PAT callers.`,
     {},
     async () => {
       try {

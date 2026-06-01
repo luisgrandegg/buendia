@@ -47,7 +47,12 @@ export async function GET(request: Request) {
 
   const app = (invitation.app as { slug?: string } | null) ?? null;
   const slug = app?.slug;
-  if (!slug) {
+  // Slugs are server-generated (slugify + random suffix), but the value
+  // we're about to splice into a redirect path comes from the database.
+  // Defence-in-depth: refuse anything that doesn't match the format we
+  // mint, so a future bug elsewhere can't poison this redirect.
+  // See SECURITY_AUDIT.md §H3.
+  if (!slug || !/^[a-z0-9-]{1,64}$/.test(slug)) {
     return NextResponse.redirect(new URL("/?invite=invalid", url.origin));
   }
 

@@ -3,6 +3,7 @@
 import { randomBytes } from "node:crypto";
 import { redirect } from "next/navigation";
 import { recordAudit } from "@buendia/db";
+import { assertSameOrigin } from "@/lib/assert-origin";
 import { env } from "@/lib/env";
 import {
   createProject,
@@ -46,6 +47,7 @@ function logAndFinish(status: ProvisionStatus, err: unknown): never {
 }
 
 export async function provisionProjectAction(): Promise<void> {
+  await assertSameOrigin();
   const supabase = await createClient();
   const {
     data: { user },
@@ -156,6 +158,7 @@ export async function provisionProjectAction(): Promise<void> {
  * --------------------------------------------------------------------- */
 
 export async function disconnectBuendiaAction(): Promise<void> {
+  await assertSameOrigin();
   const supabase = await createClient();
   const {
     data: { user },
@@ -210,6 +213,7 @@ function refreshCredsFinish(status: RefreshCredsStatus): never {
 }
 
 export async function refreshCredentialsAction(): Promise<void> {
+  await assertSameOrigin();
   const { getProjectApiKeys, getProjectJwtSecret, projectUrl } =
     await import("@/lib/management-api");
   const { byteaLiteral, encrypt, loadMasterKey } = await import("@buendia/db");

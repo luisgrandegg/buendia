@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { assertSameOrigin } from "@/lib/assert-origin";
 import { deleteApp, provisionAppSchema, renameApp, uploadApp } from "@/lib/operations/apps";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -35,6 +36,7 @@ function uploadStatusFor(code: string, message: string): string {
 }
 
 export async function uploadAppAction(formData: FormData): Promise<void> {
+  await assertSameOrigin();
   const supabase = await createClient();
   const {
     data: { user },
@@ -104,6 +106,7 @@ function provisionStatusFor(code: string, message: string): ProvisionStatus {
 }
 
 export async function provisionSchemaAction(formData: FormData): Promise<void> {
+  await assertSameOrigin();
   const appIdRaw = formData.get("app_id");
   if (typeof appIdRaw !== "string" || !appIdRaw) {
     provisionRedirect("not_found");
@@ -138,6 +141,7 @@ function renameRedirect(slug: string, status: RenameStatus): never {
 }
 
 export async function renameAppAction(formData: FormData): Promise<void> {
+  await assertSameOrigin();
   const slug = String(formData.get("slug") ?? "");
   const nameRaw = formData.get("name");
   const name = typeof nameRaw === "string" ? nameRaw : "";
@@ -178,6 +182,7 @@ function deleteOutcome(status: DeleteStatus): never {
 }
 
 export async function deleteAppAction(formData: FormData): Promise<void> {
+  await assertSameOrigin();
   const slug = String(formData.get("slug") ?? "");
 
   const supabase = await createClient();
